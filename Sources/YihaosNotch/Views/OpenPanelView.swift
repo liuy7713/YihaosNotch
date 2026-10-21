@@ -31,9 +31,14 @@ struct OpenPanelView: View {
     private var header: some View {
         HStack(spacing: 0) {
             TimelineView(.everyMinute) { context in
-                Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
+                        .foregroundStyle(Theme.secondary)
+                    Text(Self.time24(context.date))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.primary)
+                }
+                .font(.system(size: 12, weight: .semibold))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -53,6 +58,12 @@ struct OpenPanelView: View {
         }
         .padding(.horizontal, 22)
         .frame(height: model.notchSize.height)
+    }
+
+    /// Always 24-hour ("13:50"), whatever the system's 12/24-hour setting.
+    private static func time24(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
     }
 
     private var batteryIndicator: some View {
