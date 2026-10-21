@@ -1,0 +1,110 @@
+import AppKit
+import SwiftUI
+
+/// Borderless overlay that sits above the menu bar on every Space, including over
+/// full-screen apps. It never becomes key, so it never steals keyboard focus.
+final class NotchPanel: NSPanel {
+    init(contentRect: NSRect) {
+        super.init(contentRect: contentRect,
+                   styleMask: [.borderless, .nonactivatingPanel],
+                   backing: .buffered,
+                   defer: false)
+        isFloatingPanel = true
+        level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        backgroundColor = .clear
+        isOpaque = false
+        hasShadow = false
+        isMovable = false
+        isReleasedWhenClosed = false
+        hidesOnDeactivate = false
+        ignoresMouseEvents = true
+    }
+
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+/// Hosts the SwiftUI content. Lets the first click on an inactive panel hit controls
+/// directly, and reports the pointer entering or leaving the panel, where global
+/// event monitors can't see it.
+final class NotchHostingView<Content: View>: NSHostingView<Content> {
+    var onPointerCrossing: (@MainActor () -> Void)?
+
+    required init(rootView: Content) {
+        super.init(rootView: rootView)
+        addTrackingArea(NSTrackingArea(rect: .zero,
+                                       options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                       owner: self, userInfo: nil))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        onPointerCrossing?()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        onPointerCrossing?()
+    }
+}
+
+/// An invisible window matched to the closed notch's visible shape (see
+/// `NotchController.updateGesturePanel`). It receives trackpad scrolls and clicks on
+/// the notch and its wings, so they never fall through to hidden menu-bar items.
+final class NotchGesturePanel: NSPanel {
+    init(onCrossing: @escaping @MainActor () -> Void,
+         onScroll: @escaping @MainActor (NSEvent) -> Void,
+         onClick: @escaping @MainActor () -> Void) {
+        super.init(contentRect: .zero,
+                   styleMask: [.borderless, .nonactivatingPanel],
+                   backing: .buffered,
+                   defer: false)
+        level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 4)
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        // Fully transparent windows are click-through, so keep a trace of alpha.
+        backgroundColor = NSColor(white: 0, alpha: 0.01)
+        isOpaque = false
+        hasShadow = false
+        isMovable = false
+        isReleasedWhenClosed = false
+        hidesOnDeactivate = false
+        contentView = GestureView(onCrossing: onCrossing, onScroll: onScroll, onClick: onClick)
+    }
+
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+
+    private final class GestureView: NSView {
+        let onCrossing: @MainActor () -> Void
+        let onScroll: @MainActor (NSEvent) -> Void
+        let onClick: @MainActor () -> Void
+
+        init(onCrossing: @escaping @MainActor () -> Void,
+             onScroll: @escaping @MainActor (NSEvent) -> Void,
+             onClick: @escaping @MainActor () -> Void) {
+            self.onCrossing = onCrossing
+            self.onScroll = onScroll
+            self.onClick = onClick
+            super.init(frame: .zero)
+            // While the pointer is over this window, global monitors stop seeing its
+            // movement, so report entering and leaving here instead.
+            addTrackingArea(NSTrackingArea(rect: .zero,
+                                           options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                           owner: self, userInfo: nil))
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+        override func mouseEntered(with event: NSEvent) { onCrossing() }
+        override func mouseExited(with event: NSEvent) { onCrossing() }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func scrollWheel(with event: NSEvent) { onScroll(event) }
+        override func mouseDown(with event: NSEvent) { onClick() }
+    }
+}
