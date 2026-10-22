@@ -3,3 +3,4 @@ build/
 .signing/
 .DS_Store
 *.xcodeproj/xcuserdata/
+notes/
