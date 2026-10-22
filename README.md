@@ -17,6 +17,9 @@ the animations, e.g. with `screencapture -v`):
 open "build/Yihao's Notch.app" --args --preview-open
 ```
 
+The app icon is drawn in code (`scripts/icon/render-icon.swift`); after changing it,
+run `./scripts/make-icon.sh` to regenerate `Resources/AppIcon.icns`.
+
 Signing uses a local self-signed identity in `.signing/` (not committed) so macOS
 keeps Calendar/Camera/Automation permissions across rebuilds.
 
