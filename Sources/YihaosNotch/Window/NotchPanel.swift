@@ -93,9 +93,10 @@ final class NotchGesturePanel: NSPanel {
             self.onClick = onClick
             super.init(frame: .zero)
             // While the pointer is over this window, global monitors stop seeing its
-            // movement, so report entering and leaving here instead.
+            // movement, so report entering, leaving and moving here instead. Moves only
+            // flow while the pointer is over this small window.
             addTrackingArea(NSTrackingArea(rect: .zero,
-                                           options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                           options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
                                            owner: self, userInfo: nil))
         }
 
@@ -103,6 +104,7 @@ final class NotchGesturePanel: NSPanel {
 
         override func mouseEntered(with event: NSEvent) { onCrossing() }
         override func mouseExited(with event: NSEvent) { onCrossing() }
+        override func mouseMoved(with event: NSEvent) { onCrossing() }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func scrollWheel(with event: NSEvent) { onScroll(event) }
         override func mouseDown(with event: NSEvent) { onClick() }

@@ -49,7 +49,7 @@ struct NotchRootView: View {
             CompactActivityView(activity: activity)
                 // Waits until the shape has mostly shrunk back, so the wings fade in
                 // around the notch instead of inside a still-large panel.
-                .transition(.opacity.animation(.easeOut(duration: 0.2).delay(0.16)))
+                .transition(.opacity.animation(.easeOut(duration: 0.2).delay(0.22)))
         }
     }
 

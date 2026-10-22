@@ -172,8 +172,7 @@ struct CalendarCard: View {
 
 /// Five days in view, and the selected day always sits in the centre slot. Scrolling
 /// slides the days underneath it and selects whichever lands in the middle, like a
-/// picker wheel. Tapping a day, or the arrows in the faded edges, slides that day to
-/// the centre.
+/// picker wheel. Tapping a day slides it to the centre.
 private struct DayStrip: View {
     let days: [Date]
     @Binding var selection: Date
@@ -231,15 +230,6 @@ private struct DayStrip: View {
                                        .init(color: .clear, location: 1)],
                                startPoint: .leading, endPoint: .trailing)
             )
-            // The faded edges show only slivers of days, so the step arrows live there.
-            .overlay {
-                HStack {
-                    stepButton("chevron.left", by: -1)
-                    Spacer()
-                    stepButton("chevron.right", by: 1)
-                }
-                .padding(.top, 10)
-            }
         }
         .frame(height: 46)
         .onAppear { centered = selection }
@@ -256,25 +246,6 @@ private struct DayStrip: View {
             guard centered != day else { return }
             withAnimation(slide) { centered = day }
         }
-    }
-
-    private func stepButton(_ symbol: String, by offset: Int) -> some View {
-        let cal = Calendar.current
-        // startOfDay: where DST begins at midnight, "+1 day" can land at 01:00.
-        let target = cal.date(byAdding: .day, value: offset, to: selection).map(cal.startOfDay(for:))
-        let enabled = target.map { days.contains($0) } ?? false
-        return Button {
-            if let target, enabled { selection = target }
-        } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(enabled ? Theme.secondary : Theme.hairline)
-                .frame(width: 22, height: 28)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableStyle())
-        .disabled(!enabled)
-        .accessibilityLabel(offset < 0 ? "Previous day" : "Next day")
     }
 }
 
