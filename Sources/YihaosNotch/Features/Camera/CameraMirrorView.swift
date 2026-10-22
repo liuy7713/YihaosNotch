@@ -11,9 +11,14 @@ struct CameraMirrorView: View {
             shape.fill(Theme.fill)
             switch camera.access {
             case .granted:
+                Image(systemName: "video.fill")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.tertiary)
+                    .opacity(camera.isLive ? 0 : 1)
                 CameraPreview(session: camera.capture.session)
                     .scaleEffect(x: -1, y: 1)
                     .clipShape(shape)
+                    .opacity(camera.isLive ? 1 : 0)
             case .notDetermined:
                 ProgressView()
                     .controlSize(.small)
@@ -30,6 +35,7 @@ struct CameraMirrorView: View {
             }
         }
         .overlay(shape.strokeBorder(Theme.hairline, lineWidth: 0.5))
+        .animation(.easeOut(duration: 0.35), value: camera.isLive)
         .onAppear { camera.activate() }
         .onDisappear { camera.deactivate() }
     }

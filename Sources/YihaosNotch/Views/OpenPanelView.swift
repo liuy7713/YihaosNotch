@@ -8,6 +8,15 @@ struct OpenPanelView: View {
     @Environment(BatteryService.self) private var battery
     @Environment(CalendarService.self) private var calendar
     @Environment(TimerService.self) private var timer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private enum RightMode { case camera, timer, calendar, clock }
+
+    private var rightMode: RightMode {
+        if model.showingCamera { return .camera }
+        if model.showingTimer { return .timer }
+        return settings.calendarEnabled ? .calendar : .clock
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,8 +30,12 @@ struct OpenPanelView: View {
                     .fill(Theme.hairline)
                     .frame(width: 1)
                     .padding(.vertical, 6)
-                rightColumn
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                // Both the outgoing and incoming views share the space during a swap.
+                ZStack(alignment: .topLeading) {
+                    rightColumn
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .animation(Theme.swapAnimation(reduceMotion: reduceMotion), value: rightMode)
             }
             .padding(.horizontal, 22)
             .padding(.top, 12)
@@ -85,17 +98,12 @@ struct OpenPanelView: View {
 
     @ViewBuilder
     private var rightColumn: some View {
-        if model.showingCamera {
-            CameraMirrorView()
-                .transition(.opacity)
-        } else if model.showingTimer {
-            TimerPanel()
-                .transition(.opacity)
-        } else if settings.calendarEnabled {
-            CalendarCard()
-                .transition(.opacity)
-        } else {
-            ClockView()
+        let swap = AnyTransition.contentSwap(reduceMotion: reduceMotion)
+        switch rightMode {
+        case .camera: CameraMirrorView().transition(swap)
+        case .timer: TimerPanel().transition(swap)
+        case .calendar: CalendarCard().transition(swap)
+        case .clock: ClockView().transition(swap)
         }
     }
 }
@@ -161,6 +169,8 @@ private struct ClockButton: View {
         .buttonStyle(PressableStyle())
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.15), value: hovering)
+        .animation(.easeOut(duration: 0.2), value: model.showingTimer)
+        .animation(.easeOut(duration: 0.2), value: timer.isActive)
         .help("Timer")
         .accessibilityLabel(timer.isActive ? "Timer running" : "Timer")
     }

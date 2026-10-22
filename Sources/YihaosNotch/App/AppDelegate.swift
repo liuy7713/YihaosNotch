@@ -65,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Development aids for checking visuals without pressing keys or clicking:
     /// `--preview-timer` starts a 25-minute timer and shows the timer view when the panel
-    /// opens; `--preview-hud` cycles the volume, brightness and headphone indicators with
+    /// opens; `--preview-swap` (below); `--preview-hud` cycles the volume, brightness and headphone indicators with
     /// sample values (the real volume and brightness are never touched).
     private func runPreviewFlags() {
         let arguments = CommandLine.arguments
@@ -74,6 +74,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { [viewModel] in
                 try? await Task.sleep(for: .seconds(0.5))
                 viewModel?.showingTimer = true
+            }
+        }
+        // `--preview-swap` flips the right column between calendar and timer every 2 s,
+        // for checking the swap transition (the camera is deliberately left out).
+        if arguments.contains("--preview-swap") {
+            Task { [viewModel] in
+                while true {
+                    try? await Task.sleep(for: .seconds(2))
+                    viewModel?.showingTimer.toggle()
+                }
             }
         }
         if arguments.contains("--preview-hud") {

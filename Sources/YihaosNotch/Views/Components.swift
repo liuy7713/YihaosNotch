@@ -194,6 +194,7 @@ struct HeaderIconButton: View {
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(active ? Theme.primary : .clear))
                 .contentShape(Circle())
+                .animation(.easeOut(duration: 0.2), value: active)
         }
         .buttonStyle(PressableStyle())
         .hoverHighlight(cornerRadius: 13)

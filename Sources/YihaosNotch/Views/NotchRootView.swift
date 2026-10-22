@@ -74,11 +74,3 @@ struct NotchRootView: View {
         }
     }
 }
-
-private struct BlurEffect: ViewModifier {
-    let radius: CGFloat
-
-    func body(content: Content) -> some View {
-        content.blur(radius: radius)
-    }
-}

@@ -6,12 +6,20 @@ struct NowPlayingCard: View {
     /// Tall enough for title, artist, two lyric lines and the controls beside it.
     static let artSize: CGFloat = 112
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        if let track = nowPlaying.track {
-            playing(track)
-        } else {
-            idle
+        ZStack(alignment: .topLeading) {
+            if let track = nowPlaying.track {
+                playing(track)
+                    .transition(.contentSwap(reduceMotion: reduceMotion))
+            } else {
+                idle
+                    .transition(.contentSwap(reduceMotion: reduceMotion))
+            }
         }
+        .animation(Theme.swapAnimation(reduceMotion: reduceMotion), value: nowPlaying.track == nil)
+        .animation(.easeOut(duration: 0.25), value: nowPlaying.lyrics == nil)
     }
 
     private func playing(_ track: Track) -> some View {
@@ -38,6 +46,7 @@ struct NowPlayingCard: View {
                         LyricLine(lyrics: lyrics, color: nowPlaying.accent, isPlaying: nowPlaying.isPlaying,
                                   position: { nowPlaying.position(at: $0) })
                             .padding(.top, 6)
+                            .transition(.opacity)
                     }
                     Spacer(minLength: 0)
                     controls

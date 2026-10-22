@@ -1,5 +1,9 @@
 import AppKit
 import ApplicationServices
+import os
+
+/// `log stream --predicate 'subsystem == "com.yihao.YihaosNotch"' --level debug`
+private let log = Logger(subsystem: "com.yihao.YihaosNotch", category: "MediaKeys")
 
 /// Replaces the system volume and brightness pop-ups with the notch.
 ///
@@ -73,6 +77,7 @@ final class MediaKeyController {
     /// Starts the tap once permission is there, or tears it down if it was revoked.
     func refreshPermission() {
         hasPermission = AXIsProcessTrusted()
+        log.info("permission trusted=\(self.hasPermission) wanted=\(self.wanted) running=\(self.isRunning)")
         if hasPermission, wanted { startTap() }
         if !hasPermission { stopTap() }
     }
@@ -90,7 +95,11 @@ final class MediaKeyController {
                                           options: .defaultTap, eventsOfInterest: mask,
                                           callback: mediaKeyTapCallback,
                                           userInfo: Unmanaged.passUnretained(self).toOpaque())
-        else { return }
+        else {
+            log.error("event tap could not be created")
+            return
+        }
+        log.info("event tap started")
         let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
@@ -123,6 +132,12 @@ final class MediaKeyController {
 
     /// Returns true to swallow the event so the system pop-up doesn't also appear.
     fileprivate func handle(_ key: MediaKey) -> Bool {
+        let swallowed = decide(key)
+        log.debug("key \(key.code.rawValue) down=\(key.isDown) repeat=\(key.isRepeat) swallowed=\(swallowed)")
+        return swallowed
+    }
+
+    private func decide(_ key: MediaKey) -> Bool {
         // A key-up follows its key-down's fate, whatever has changed in between.
         guard key.isDown else { return swallowedDowns.remove(key.code) != nil }
         // A held key's repeats follow the original press: handled only if it was, and

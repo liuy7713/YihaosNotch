@@ -13,7 +13,8 @@ Launch with `--preview-open` to pin the panel open (useful for screenshots), or
 `--preview-cycle` to open and close it every 1.5 s (useful for recording and tuning
 the animations, e.g. with `screencapture -v`). `--preview-timer` starts a 25-minute
 timer and shows the timer view; `--preview-hud` cycles the volume, brightness and
-headphone indicators with sample values (the real volume and brightness are untouched):
+headphone indicators with sample values (the real volume and brightness are untouched);
+`--preview-swap` flips the right column between calendar and timer every 2 s:
 
 ```sh
 open "build/Yihao's Notch.app" --args --preview-open

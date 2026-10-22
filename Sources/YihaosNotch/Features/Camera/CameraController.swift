@@ -46,7 +46,22 @@ final class CameraController {
     enum Access { case notDetermined, granted, denied }
 
     private(set) var access: Access = CameraController.currentAccess()
+    /// True once the session is actually running, so the picture can fade in rather
+    /// than showing black while the camera warms up.
+    private(set) var isLive = false
     @ObservationIgnored let capture = CaptureSession()
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+
+    init() {
+        for (name, live) in [(AVCaptureSession.didStartRunningNotification, true),
+                             (AVCaptureSession.didStopRunningNotification, false)] {
+            observers.append(NotificationCenter.default.addObserver(
+                forName: name, object: capture.session, queue: .main
+            ) { _ in
+                MainActor.assumeIsolated { self.isLive = live }
+            })
+        }
+    }
     /// True while the mirror is on screen. The permission prompt can outlive the
     /// mirror (the notch closes while you click Allow), so the camera starts only if
     /// the mirror is still showing once access is granted.

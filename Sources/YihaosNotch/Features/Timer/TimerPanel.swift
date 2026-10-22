@@ -4,19 +4,20 @@ import SwiftUI
 /// timer, or the running countdown with its controls.
 struct TimerPanel: View {
     @Environment(TimerService.self) private var timer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let presets = [1, 3, 5, 10, 15, 25, 45, 60]
 
     var body: some View {
-        Group {
+        ZStack(alignment: .topLeading) {
             if timer.isActive {
-                running
+                running.transition(.contentSwap(reduceMotion: reduceMotion))
             } else {
-                presets
+                presets.transition(.contentSwap(reduceMotion: reduceMotion))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .animation(.easeOut(duration: 0.18), value: timer.isActive)
+        .animation(Theme.swapAnimation(reduceMotion: reduceMotion), value: timer.isActive)
     }
 
     private var presets: some View {
