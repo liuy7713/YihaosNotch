@@ -16,7 +16,10 @@ enum Theme {
     static let today = Color(red: 1.00, green: 0.33, blue: 0.30)
 
     static let open = Animation.spring(response: 0.42, dampingFraction: 0.80)
-    static let close = Animation.spring(response: 0.34, dampingFraction: 0.92)
+    /// Slightly softer than before, with a whisper of overshoot so the shape settles
+    /// into the notch rather than stopping dead. Any undershoot hides inside the
+    /// hardware notch.
+    static let close = Animation.spring(response: 0.40, dampingFraction: 0.86)
     static let nudge = Animation.spring(response: 0.30, dampingFraction: 0.68)
 }
 

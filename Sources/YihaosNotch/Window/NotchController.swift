@@ -28,6 +28,9 @@ final class NotchController {
     /// Development aid: `--preview-open` opens the panel at launch and keeps it open,
     /// so it can be screenshotted without hovering.
     private let pinnedOpen = CommandLine.arguments.contains("--preview-open")
+    /// Development aid: `--preview-cycle` opens and closes the notch on a loop, so the
+    /// animations can be recorded and tuned.
+    private let previewCycle = CommandLine.arguments.contains("--preview-cycle")
 
     /// Room around the open shape for its shadow. The panel window is exactly the open
     /// hit area, so clicks just outside the visible panel are never swallowed by a
@@ -66,6 +69,18 @@ final class NotchController {
         }) { monitors.append(m) }
 
         if pinnedOpen { open() }
+        if previewCycle { runPreviewCycle() }
+    }
+
+    private func runPreviewCycle() {
+        Task {
+            while true {
+                try? await Task.sleep(for: .seconds(1.5))
+                open()
+                try? await Task.sleep(for: .seconds(1.5))
+                close()
+            }
+        }
     }
 
     // MARK: Layout
@@ -258,6 +273,7 @@ final class NotchController {
         closeTask?.cancel()
         closeTask = nil
         guard viewModel.state != .open, screenFrame != .zero else { return }
+        viewModel.showingCamera = false
         viewModel.state = .open
         panel?.ignoresMouseEvents = false
         if settings.hapticsEnabled {
@@ -281,7 +297,6 @@ final class NotchController {
         closeTask?.cancel()
         closeTask = nil
         viewModel.state = .closed
-        viewModel.showingCamera = false
         panel?.ignoresMouseEvents = true
         stopSafetyTimer()
     }

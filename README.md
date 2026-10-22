@@ -9,7 +9,9 @@ A personal replacement for Boring Notch on the MacBook Pro's built-in display.
 ./scripts/build.sh --install  # also installs to ~/Applications and relaunches
 ```
 
-Launch with `--preview-open` to pin the panel open (useful for screenshots):
+Launch with `--preview-open` to pin the panel open (useful for screenshots), or
+`--preview-cycle` to open and close it every 1.5 s (useful for recording and tuning
+the animations, e.g. with `screencapture -v`):
 
 ```sh
 open "build/Yihao's Notch.app" --args --preview-open
