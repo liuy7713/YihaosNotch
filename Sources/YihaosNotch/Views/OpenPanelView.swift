@@ -144,7 +144,7 @@ private struct ClockButton: View {
                 Text(now.time24)
                     .foregroundStyle(Theme.primary)
                 if timer.isActive {
-                    let isPaused: Bool = if case .paused = timer.phase { true } else { false }
+                    let isPaused = timer.isPaused
                     TimelineView(.animation(minimumInterval: 1, paused: isPaused)) { context in
                         HStack(spacing: 3) {
                             Image(systemName: "timer")

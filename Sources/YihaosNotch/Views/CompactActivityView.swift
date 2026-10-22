@@ -96,7 +96,7 @@ struct CompactActivityView: View {
                 .truncationMode(.tail)
                 .padding(.horizontal, 6)
         case .timer:
-            let isPaused: Bool = if case .paused = timer.phase { true } else { false }
+            let isPaused = timer.isPaused
             TimelineView(.animation(minimumInterval: 1, paused: isPaused)) { context in
                 let remaining = timer.remaining(at: context.date)
                 Text(remaining.countdownText)

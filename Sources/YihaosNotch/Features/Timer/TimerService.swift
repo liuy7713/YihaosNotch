@@ -36,6 +36,10 @@ final class TimerService {
 
     var isActive: Bool { phase != .idle }
 
+    var isPaused: Bool {
+        if case .paused = phase { true } else { false }
+    }
+
     func remaining(at date: Date = .now) -> TimeInterval {
         switch phase {
         case .idle: 0

@@ -8,10 +8,14 @@ final class CaptureSession: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.yihao.YihaosNotch.camera")
     private var configured = false
 
-    func start() {
+    /// Starts the session and reports on the main actor whether it's running. It may
+    /// not be: no camera, or one held exclusively by another app.
+    func start(completion: @escaping @MainActor @Sendable (Bool) -> Void) {
         queue.async { [self] in
             configureIfNeeded()
             if !session.isRunning { session.startRunning() }
+            let running = session.isRunning
+            Task { @MainActor in completion(running) }
         }
     }
 
@@ -49,6 +53,9 @@ final class CameraController {
     /// True once the session is actually running, so the picture can fade in rather
     /// than showing black while the camera warms up.
     private(set) var isLive = false
+    /// The camera couldn't be started (missing, or in use elsewhere), so the mirror
+    /// says so instead of waiting on a placeholder.
+    private(set) var isUnavailable = false
     @ObservationIgnored let capture = CaptureSession()
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
@@ -61,6 +68,14 @@ final class CameraController {
                 MainActor.assumeIsolated { self.isLive = live }
             })
         }
+        observers.append(NotificationCenter.default.addObserver(
+            forName: AVCaptureSession.runtimeErrorNotification, object: capture.session, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                self.isLive = false
+                self.isUnavailable = true
+            }
+        })
     }
     /// True while the mirror is on screen. The permission prompt can outlive the
     /// mirror (the notch closes while you click Allow), so the camera starts only if
@@ -71,17 +86,25 @@ final class CameraController {
         wantsRunning = true
         // Re-read each time, so access granted later in System Settings is picked up.
         access = Self.currentAccess()
+        isUnavailable = false
         switch access {
         case .granted:
-            capture.start()
+            startCapture()
         case .notDetermined:
             Task {
                 let granted = await AVCaptureDevice.requestAccess(for: .video)
                 access = granted ? .granted : .denied
-                if granted, wantsRunning { capture.start() }
+                if granted, wantsRunning { startCapture() }
             }
         case .denied:
             break
+        }
+    }
+
+    private func startCapture() {
+        capture.start { running in
+            guard self.wantsRunning else { return }
+            self.isUnavailable = !running
         }
     }
 

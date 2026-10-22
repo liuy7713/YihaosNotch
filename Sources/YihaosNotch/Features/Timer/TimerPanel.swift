@@ -46,11 +46,12 @@ struct TimerPanel: View {
                     .accessibilityLabel("\(minutes) minute timer")
                 }
             }
+            .padding(.horizontal, CalendarCard.inset)
         }
     }
 
     private var running: some View {
-        let isPaused: Bool = if case .paused = timer.phase { true } else { false }
+        let isPaused = timer.isPaused
         return VStack(alignment: .leading, spacing: 12) {
             TimelineView(.animation(minimumInterval: 1, paused: isPaused)) { context in
                 let remaining = timer.remaining(at: context.date)

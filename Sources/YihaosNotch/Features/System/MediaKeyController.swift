@@ -47,6 +47,11 @@ final class MediaKeyController {
         }
     }
 
+    isolated deinit {
+        // The tap holds an unretained pointer to self; remove it first.
+        stopTap()
+    }
+
     /// Turns interception on. `prompt` shows the system Accessibility request if
     /// permission is missing; that only happens from the Settings toggle, never at launch.
     func enable(prompt: Bool) {

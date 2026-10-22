@@ -10,6 +10,10 @@ struct CameraMirrorView: View {
         ZStack {
             shape.fill(Theme.fill)
             switch camera.access {
+            case .granted where camera.isUnavailable:
+                Text("Camera unavailable")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.tertiary)
             case .granted:
                 Image(systemName: "video.fill")
                     .font(.system(size: 18, weight: .medium))

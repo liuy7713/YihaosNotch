@@ -41,7 +41,7 @@ extension AnyTransition {
             insertion: .opacity
                 .combined(with: .scale(scale: 0.97))
                 .combined(with: .modifier(active: BlurEffect(radius: 4), identity: BlurEffect(radius: 0)))
-                .animation(Theme.swap.delay(0.06)),
+                .animation(Theme.swap.delay(0.1)),
             removal: .opacity.animation(.easeOut(duration: 0.12))
         )
     }

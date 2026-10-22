@@ -25,17 +25,16 @@ cp "$BIN_DIR/YihaosNotch" "$APP/Contents/MacOS/YihaosNotch"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 [[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 
-# Sign with the local self-signed identity so macOS keeps permissions
-# (Calendar, Camera, Automation) across rebuilds. Falls back to ad-hoc.
-# The password below only unlocks the throwaway keychain in .signing/ (git-ignored),
-# which holds nothing but this one self-signed certificate.
+# Sign with the local self-signed identity (see scripts/make-signing-identity.sh) so
+# macOS keeps permissions across rebuilds. Falls back to ad-hoc signing.
 KEYCHAIN="$ROOT/.signing/signing.keychain-db"
-if [[ -f "$KEYCHAIN" ]]; then
-  security unlock-keychain -p yihaosnotch-local "$KEYCHAIN"
+if [[ -f "$KEYCHAIN" && -f "$ROOT/.signing/password" ]]; then
+  security unlock-keychain -p "$(<"$ROOT/.signing/password")" "$KEYCHAIN"
   IDENTITY=$(openssl x509 -in "$ROOT/.signing/cert.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
   codesign --force --keychain "$KEYCHAIN" --sign "$IDENTITY" "$APP"
 else
-  echo "warning: no local signing identity, signing ad-hoc (permissions reset on every build)"
+  echo "warning: no local signing identity, signing ad-hoc (permissions reset on every build)."
+  echo "         Run ./scripts/make-signing-identity.sh once to fix that."
   codesign --force --sign - "$APP"
 fi
 
