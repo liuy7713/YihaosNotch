@@ -125,10 +125,14 @@ final class MediaKeyController {
     fileprivate func handle(_ key: MediaKey) -> Bool {
         // A key-up follows its key-down's fate, whatever has changed in between.
         guard key.isDown else { return swallowedDowns.remove(key.code) != nil }
-        // Holding mute must not flicker between muted and unmuted.
-        if key.isRepeat && key.code == .mute { return swallowedDowns.contains(.mute) }
+        // A held key's repeats follow the original press: handled only if it was, and
+        // never for mute, which would otherwise flicker between muted and unmuted.
+        if key.isRepeat {
+            guard swallowedDowns.contains(key.code) else { return false }
+            if key.code == .mute { return true }
+        }
 
-        guard canShowHUD() else { return false }
+        guard key.isRepeat || canShowHUD() else { return false }
         let flags = NSEvent.ModifierFlags(rawValue: key.modifiers)
         // Option alone with these keys opens the matching System Settings pane; leave it.
         if flags.contains(.option) && !flags.contains(.shift) { return false }
