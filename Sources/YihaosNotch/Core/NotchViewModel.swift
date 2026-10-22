@@ -64,20 +64,21 @@ final class NotchViewModel {
     }
 
     /// The highest-priority activity right now: brief events (power, volume,
-    /// headphones, a finished timer), then an imminent calendar event, then a running
-    /// timer, then music.
+    /// headphones, a finished timer), then a running timer, then music that's
+    /// playing, then an imminent calendar event, then paused music.
     var activity: LiveActivity? {
         if let transient { return transient }
+        if timer.isActive { return .timer }
+        let showsMusic = settings.showMusicActivity && nowPlaying.track != nil
+        // A playing track keeps the wings; the event countdown waits until it pauses or stops.
+        if showsMusic, nowPlaying.isPlaying { return .music }
         if settings.calendarEnabled, settings.eventReminderMinutes > 0,
            let event = calendar.imminentEvent(withinMinutes: settings.eventReminderMinutes) {
             return .event(title: event.title, start: event.start, color: event.color)
         }
-        if timer.isActive { return .timer }
         // Stays while paused (the player still has a track); only quitting or a
         // full stop removes it.
-        if settings.showMusicActivity, nowPlaying.track != nil {
-            return .music
-        }
+        if showsMusic { return .music }
         return nil
     }
 
