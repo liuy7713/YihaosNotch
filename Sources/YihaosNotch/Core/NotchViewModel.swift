@@ -67,18 +67,30 @@ final class NotchViewModel {
     /// headphones, a finished timer), then a running timer, then music that's
     /// playing, then an imminent calendar event, then paused music.
     var activity: LiveActivity? {
-        if let transient { return transient }
-        if timer.isActive { return .timer }
-        let showsMusic = settings.showMusicActivity && nowPlaying.track != nil
-        // A playing track keeps the wings; the event countdown waits until it pauses or stops.
-        if showsMusic, nowPlaying.isPlaying { return .music }
-        if settings.calendarEnabled, settings.eventReminderMinutes > 0,
-           let event = calendar.imminentEvent(withinMinutes: settings.eventReminderMinutes) {
-            return .event(title: event.title, start: event.start, color: event.color)
+        let event: LiveActivity? = if settings.calendarEnabled, settings.eventReminderMinutes > 0,
+            let item = calendar.imminentEvent(withinMinutes: settings.eventReminderMinutes) {
+            .event(title: item.title, start: item.start, color: item.color)
+        } else {
+            nil
         }
-        // Stays while paused (the player still has a track); only quitting or a
-        // full stop removes it.
-        if showsMusic { return .music }
+        return Self.prioritise(transient: transient,
+                               timerRunning: timer.isActive,
+                               hasTrack: settings.showMusicActivity && nowPlaying.track != nil,
+                               isPlaying: nowPlaying.isPlaying,
+                               event: event)
+    }
+
+    /// The priority rules on their own, so they can be checked without live services.
+    static func prioritise(transient: LiveActivity?, timerRunning: Bool, hasTrack: Bool,
+                           isPlaying: Bool, event: LiveActivity?) -> LiveActivity? {
+        if let transient { return transient }
+        if timerRunning { return .timer }
+        // A playing track keeps the wings; the event countdown waits until it pauses or stops.
+        if hasTrack, isPlaying { return .music }
+        if let event { return event }
+        // Paused music stays (the player still has a track); only quitting or a full
+        // stop removes it.
+        if hasTrack { return .music }
         return nil
     }
 
