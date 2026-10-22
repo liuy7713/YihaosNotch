@@ -56,6 +56,7 @@ final class CalendarService {
     /// Meeting-link detection runs NSDataDetector over long invite notes, so results are
     /// kept per event revision (identifier + last-modified date).
     @ObservationIgnored private var meetingCache: [String: MeetingLink?] = [:]
+    @ObservationIgnored private var pendingRefresh: Task<Void, Never>?
 
     var today: Date { Calendar.current.startOfDay(for: now) }
 
@@ -71,7 +72,7 @@ final class CalendarService {
 
         let center = NotificationCenter.default
         observers.append((center, center.addObserver(forName: .EKEventStoreChanged, object: store, queue: .main) { _ in
-            MainActor.assumeIsolated { self.refresh() }
+            MainActor.assumeIsolated { self.scheduleRefresh() }
         }))
         // Midnight, a time-zone change and waking from sleep can all change "today".
         for name in [Notification.Name.NSCalendarDayChanged, .NSSystemTimeZoneDidChange] {
@@ -96,6 +97,7 @@ final class CalendarService {
         started = false
         minuteTimer?.invalidate()
         minuteTimer = nil
+        pendingRefresh?.cancel()
         observers.forEach { $0.center.removeObserver($0.token) }
         observers.removeAll()
         eventsByDay = [:]
@@ -173,6 +175,16 @@ final class CalendarService {
         meetingCache = meetingCache.filter { seenMeetingKeys.contains($0.key) }
     }
 
+    /// A calendar sync posts store changes in bursts; refetch once it settles.
+    private func scheduleRefresh() {
+        pendingRefresh?.cancel()
+        pendingRefresh = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            refresh()
+        }
+    }
+
     func openPrivacySettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!
         NSWorkspace.shared.open(url)
@@ -216,7 +228,10 @@ final class CalendarService {
     private func item(from event: EKEvent, seenMeetingKeys: inout Set<String>) -> CalendarItem {
         let location = event.location?.trimmingCharacters(in: .whitespacesAndNewlines)
         let revision = event.lastModifiedDate?.timeIntervalSince1970 ?? 0
-        let meetingKey = "\(event.calendarItemIdentifier)-\(revision)"
+        // A detached occurrence (one edited on its own) can carry a different link from
+        // its series, so it gets its own entry; ordinary occurrences share the series'.
+        let occurrence = event.isDetached ? "-\(event.occurrenceDate?.timeIntervalSince1970 ?? 0)" : ""
+        let meetingKey = "\(event.calendarItemIdentifier)-\(revision)\(occurrence)"
         seenMeetingKeys.insert(meetingKey)
         let meeting: MeetingLink?
         if let cached = meetingCache[meetingKey] {

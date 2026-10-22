@@ -12,8 +12,10 @@ struct OpenPanelView: View {
         VStack(spacing: 0) {
             header
             HStack(alignment: .top, spacing: 18) {
+                // 300 + 37 (gap and divider) leaves 259 for the calendar: five 52 pt days,
+                // and room for event titles beside the Join button.
                 NowPlayingCard()
-                    .frame(width: 326)
+                    .frame(width: 300)
                 Rectangle()
                     .fill(Theme.hairline)
                     .frame(width: 1)
@@ -34,7 +36,7 @@ struct OpenPanelView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
                         .foregroundStyle(Theme.secondary)
-                    Text(Self.time24(context.date))
+                    Text(context.date.time24)
                         .monospacedDigit()
                         .foregroundStyle(Theme.primary)
                 }
@@ -58,12 +60,6 @@ struct OpenPanelView: View {
         }
         .padding(.horizontal, 22)
         .frame(height: model.notchSize.height)
-    }
-
-    /// Always 24-hour ("13:50"), whatever the system's 12/24-hour setting.
-    private static func time24(_ date: Date) -> String {
-        let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
     }
 
     private var batteryIndicator: some View {
@@ -104,7 +100,7 @@ private struct ClockView: View {
     var body: some View {
         TimelineView(.everyMinute) { context in
             VStack(alignment: .leading, spacing: 2) {
-                Text(context.date.formatted(date: .omitted, time: .shortened))
+                Text(context.date.time24)
                     .font(.system(size: 40, weight: .semibold, design: .rounded).monospacedDigit())
                     .foregroundStyle(Theme.primary)
                 Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.wide)))

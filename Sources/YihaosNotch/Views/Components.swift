@@ -69,12 +69,13 @@ final class AudioBarsNSView: NSView {
 
     /// Still shape shown while paused.
     private static let restHeights: [CGFloat] = [4, 6, 5, 3.5]
-    /// One loop per bar; first and last values match so each loop is seamless.
+    /// One loop per bar. Each starts and ends at that bar's rest height, so resuming
+    /// from pause doesn't jump and each loop is seamless.
     private static let keyframes: [[CGFloat]] = [
         [4, 11, 6, 13, 5, 9, 4],
-        [7, 4, 12, 6, 14, 5, 7],
+        [6, 4, 12, 7, 14, 5, 6],
         [5, 13, 4, 10, 7, 12, 5],
-        [6, 4, 9, 13, 5, 8, 6],
+        [3.5, 9, 13, 5, 10, 6, 3.5],
     ]
     /// Different, non-multiple durations so the bars never visibly sync up.
     private static let durations: [Double] = [1.9, 1.5, 1.7, 1.35]
@@ -199,6 +200,14 @@ struct HeaderIconButton: View {
         .help(label)
         .accessibilityLabel(label)
         .accessibilityAddTraits(active ? .isSelected : [])
+    }
+}
+
+extension Date {
+    /// Always 24-hour ("13:50"), whatever the system's 12/24-hour setting.
+    var time24: String {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: self)
+        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
     }
 }
 

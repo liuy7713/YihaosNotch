@@ -29,6 +29,16 @@ enum MusicSource: String, CaseIterable, Sendable {
 
     var appURL: URL? { NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) }
 
+    /// The player's app icon, looked up once.
+    @MainActor var icon: NSImage? {
+        if let cached = Self.iconCache[self] { return cached }
+        let icon = appURL.map { NSWorkspace.shared.icon(forFile: $0.path) }
+        Self.iconCache[self] = icon
+        return icon
+    }
+
+    @MainActor private static var iconCache: [MusicSource: NSImage?] = [:]
+
     var isRunning: Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
     }
@@ -341,7 +351,21 @@ final class NowPlayingService {
         guard let urlString, let url = URL(string: urlString),
               let (data, _) = try? await URLSession.shared.data(from: url)
         else { return nil }
-        return NSImage(data: data)
+        return downsampled(data)
+    }
+
+    /// Artwork is shown at 112 pt at most, but Music's originals can be 3000 px
+    /// (tens of MB once decoded). Decode straight to a small thumbnail instead.
+    private static func downsampled(_ data: Data, maxPixels: Int = 320) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
     }
 
     /// Music only hands artwork over as raw data, so the script writes it to a file.
@@ -363,6 +387,6 @@ final class NowPlayingService {
             return "ok"
             """)
         guard await Osascript.run(script) == "ok", let data = try? Data(contentsOf: file) else { return nil }
-        return NSImage(data: data)
+        return downsampled(data)
     }
 }

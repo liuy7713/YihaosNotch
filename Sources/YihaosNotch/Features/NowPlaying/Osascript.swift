@@ -6,6 +6,8 @@ enum Osascript {
     /// Returns trimmed stdout, or nil if the script fails. The child process is
     /// terminated if it runs past `deadline` seconds or the calling task is cancelled.
     static func run(_ source: String, deadline: Double = 5) async -> String? {
+        if Task.isCancelled { return nil }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", source]
@@ -13,31 +15,38 @@ enum Osascript {
         process.standardOutput = stdout
         process.standardError = FileHandle.nullDevice
         let reader = stdout.fileHandleForReading
-        let output = OutputBuffer()
+        let state = RunState()
 
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
-                // Drain the pipe as data arrives; a child that filled the pipe buffer
-                // would otherwise block forever and never terminate.
+                state.begin(continuation)
+                // The pipe is drained only here, as data arrives: a child that filled the
+                // pipe buffer would otherwise block forever. The result is delivered once
+                // both end-of-file and process exit have been seen, so no trailing output
+                // can be lost between the two.
                 reader.readabilityHandler = { handle in
                     let chunk = handle.availableData
-                    if chunk.isEmpty { handle.readabilityHandler = nil } else { output.append(chunk) }
+                    if chunk.isEmpty {
+                        handle.readabilityHandler = nil
+                        state.sawEndOfFile()
+                    } else {
+                        state.append(chunk)
+                    }
                 }
                 process.terminationHandler = { proc in
+                    state.exited(success: proc.terminationStatus == 0 && proc.terminationReason == .exit)
+                }
+                // Cancellation may have arrived while we were setting up.
+                guard !state.isCancelled else {
                     reader.readabilityHandler = nil
-                    output.append(reader.readDataToEndOfFile())
-                    guard proc.terminationStatus == 0, proc.terminationReason == .exit else {
-                        continuation.resume(returning: nil)
-                        return
-                    }
-                    let text = String(decoding: output.data, as: UTF8.self)
-                    continuation.resume(returning: text.trimmingCharacters(in: .whitespacesAndNewlines))
+                    state.fail()
+                    return
                 }
                 do {
                     try process.run()
                 } catch {
                     reader.readabilityHandler = nil
-                    continuation.resume(returning: nil)
+                    state.fail()
                     return
                 }
                 DispatchQueue.global().asyncAfter(deadline: .now() + deadline) {
@@ -45,6 +54,7 @@ enum Osascript {
                 }
             }
         } onCancel: {
+            state.cancel()
             if process.isRunning { process.terminate() }
         }
     }
@@ -54,14 +64,62 @@ enum Osascript {
         Double(text.replacingOccurrences(of: ",", with: "."))
     }
 
-    private final class OutputBuffer: @unchecked Sendable {
+    /// Collects output and resumes the caller exactly once.
+    private final class RunState: @unchecked Sendable {
         private let lock = NSLock()
-        private var storage = Data()
+        private var output = Data()
+        private var endOfFile = false
+        private var exitSuccess: Bool?
+        private var cancelled = false
+        private var finished = false
+        private var continuation: CheckedContinuation<String?, Never>?
 
-        func append(_ chunk: Data) {
-            lock.withLock { storage.append(chunk) }
+        var isCancelled: Bool { lock.withLock { cancelled } }
+
+        func begin(_ continuation: CheckedContinuation<String?, Never>) {
+            lock.withLock { self.continuation = continuation }
         }
 
-        var data: Data { lock.withLock { storage } }
+        func append(_ chunk: Data) {
+            lock.withLock { output.append(chunk) }
+        }
+
+        func sawEndOfFile() {
+            lock.withLock { endOfFile = true }
+            finishIfReady()
+        }
+
+        func exited(success: Bool) {
+            lock.withLock { exitSuccess = success }
+            finishIfReady()
+        }
+
+        func cancel() {
+            lock.withLock { cancelled = true }
+        }
+
+        func fail() {
+            resume(with: nil)
+        }
+
+        private func finishIfReady() {
+            let result: String?? = lock.withLock {
+                guard endOfFile, let exitSuccess else { return .none }
+                guard exitSuccess else { return .some(nil) }
+                let text = String(decoding: output, as: UTF8.self)
+                return .some(text.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+            if let result { resume(with: result) }
+        }
+
+        private func resume(with result: String?) {
+            let pending: CheckedContinuation<String?, Never>? = lock.withLock {
+                guard !finished else { return nil }
+                finished = true
+                defer { continuation = nil }
+                return continuation
+            }
+            pending?.resume(returning: result)
+        }
     }
 }

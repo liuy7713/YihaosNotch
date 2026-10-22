@@ -28,11 +28,14 @@ struct Lyrics: Equatable, Sendable {
         // ASCII digits only: `\d` alone also matches full-width digits that Double can't parse.
         let stamp = /\[(\d+):(\d+(?:[.:]\d+)?)\]/.asciiOnlyDigits()
         let offsetTag = /\[offset:\s*([+-]?\d+)\]/.asciiOnlyDigits()
+        // Enhanced LRC adds per-word timing ("<00:01.10>word"); only line timing is used.
+        let wordTag = /<\d+:\d+(?:[.:]\d+)?>/.asciiOnlyDigits()
 
         var offset = 0.0
         var parsed: [Line] = []
         for raw in lrc.split(whereSeparator: \.isNewline) {
-            var rest = raw.drop(while: \.isWhitespace)
+            // A UTF-8 byte-order mark isn't whitespace, but would hide the first stamp.
+            var rest = raw.drop { $0.isWhitespace || $0 == "\u{FEFF}" }
             if let match = rest.prefixMatch(of: offsetTag), let ms = Double(match.output.1) {
                 // Positive offsets make lyrics appear sooner.
                 offset = ms / 1000
@@ -47,7 +50,7 @@ struct Lyrics: Equatable, Sendable {
                 rest = rest[match.range.upperBound...]
             }
             guard !times.isEmpty else { continue }
-            let text = rest.trimmingCharacters(in: .whitespaces)
+            let text = rest.replacing(wordTag, with: "").trimmingCharacters(in: .whitespaces)
             parsed += times.map { Line(time: $0, text: text) }
         }
         guard !parsed.isEmpty else { return nil }
@@ -79,19 +82,26 @@ enum LyricsFetcher {
         case failed
     }
 
+    /// LRCLIB regularly answers a first-time lookup with "503 server busy", so a failed
+    /// attempt is retried once after a short pause. The caller's task can cancel it.
     static func fetch(for track: Track) async -> Result {
+        let first = await attempt(track)
+        guard case .failed = first, !Task.isCancelled else { return first }
+        try? await Task.sleep(for: .seconds(2.5))
+        guard !Task.isCancelled else { return .failed }
+        return await attempt(track)
+    }
+
+    private static func attempt(_ track: Track) async -> Result {
         // Exact lookup first: it matches on duration, so it rarely picks the wrong version.
-        switch await get(track) {
-        case .ok(let record):
-            if let lyrics = record.syncedLyrics.flatMap(Lyrics.init(lrc:)) { return .found(lyrics) }
-        case .notFound:
-            break
-        case .failed:
-            return .failed
+        let exact = await get(track)
+        if case .ok(let record) = exact, let lyrics = record.syncedLyrics.flatMap(Lyrics.init(lrc:)) {
+            return .found(lyrics)
         }
         guard !Task.isCancelled else { return .failed }
 
-        // Fall back to a search, using only the first artist ("A, B" → "A").
+        // Then a search, using only the first artist ("A, B" → "A"). Tried even when the
+        // exact lookup failed: the two endpoints don't fail together.
         let firstArtist = track.artist.split(separator: ",").first.map(String.init) ?? track.artist
         switch await search(title: track.title, artist: firstArtist) {
         case .ok(let records):
@@ -99,8 +109,12 @@ enum LyricsFetcher {
                 record.syncedLyrics != nil
                     && (track.duration <= 0 || abs((record.duration ?? track.duration) - track.duration) <= 4)
             }
-            return match?.syncedLyrics.flatMap(Lyrics.init(lrc:)).map(Result.found) ?? .notFound
+            if let lyrics = match?.syncedLyrics.flatMap(Lyrics.init(lrc:)) { return .found(lyrics) }
+            // Only a definite answer from both endpoints counts as "no lyrics".
+            if case .failed = exact { return .failed }
+            return .notFound
         case .notFound:
+            if case .failed = exact { return .failed }
             return .notFound
         case .failed:
             return .failed

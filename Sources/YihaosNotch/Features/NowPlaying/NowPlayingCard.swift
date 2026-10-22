@@ -3,6 +3,9 @@ import SwiftUI
 struct NowPlayingCard: View {
     @Environment(NowPlayingService.self) private var nowPlaying
 
+    /// Tall enough for title, artist, two lyric lines and the controls beside it.
+    static let artSize: CGFloat = 112
+
     var body: some View {
         if let track = nowPlaying.track {
             playing(track)
@@ -15,7 +18,7 @@ struct NowPlayingCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 14) {
                 Button { nowPlaying.openPlayer() } label: {
-                    ArtworkView(image: nowPlaying.artwork, size: 92, cornerRadius: 13)
+                    ArtworkView(image: nowPlaying.artwork, size: Self.artSize, cornerRadius: 15)
                 }
                 .buttonStyle(PressableStyle())
                 .help("Open \(nowPlaying.source?.appName ?? "player")")
@@ -39,13 +42,13 @@ struct NowPlayingCard: View {
                     Spacer(minLength: 0)
                     controls
                 }
-                .frame(height: 92)
+                .frame(height: Self.artSize)
             }
             Scrubber(duration: track.duration, isPlaying: nowPlaying.isPlaying,
                      position: { nowPlaying.position(at: $0) },
                      onSeek: { nowPlaying.seek(to: $0) })
         }
-        .frame(maxHeight: .infinity, alignment: .center)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var controls: some View {
@@ -75,7 +78,7 @@ struct NowPlayingCard: View {
 
     private var idle: some View {
         HStack(alignment: .top, spacing: 14) {
-            ArtworkView(image: nil, size: 92, cornerRadius: 13)
+            ArtworkView(image: nil, size: Self.artSize, cornerRadius: 15)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Not playing")
                     .font(.system(size: 13, weight: .semibold))
@@ -90,9 +93,9 @@ struct NowPlayingCard: View {
                     }
                 }
             }
-            .frame(height: 92)
+            .frame(height: Self.artSize)
         }
-        .frame(maxHeight: .infinity, alignment: .center)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -103,8 +106,8 @@ private struct PlayerChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                if let url = source.appURL {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                if let icon = source.icon {
+                    Image(nsImage: icon)
                         .resizable()
                         .frame(width: 14, height: 14)
                 }
@@ -121,8 +124,8 @@ private struct PlayerChip: View {
     }
 }
 
-/// The current lyric line. Each new line slides up into place (or fades, with
-/// Reduce Motion). The timeline stops while paused.
+/// The current lyric line, wrapping onto a second line when it's long. Each new line
+/// slides up into place (or fades, with Reduce Motion). The timeline stops while paused.
 private struct LyricLine: View {
     let lyrics: Lyrics
     let color: Color
@@ -135,20 +138,20 @@ private struct LyricLine: View {
         TimelineView(.animation(minimumInterval: 0.2, paused: !isPlaying)) { context in
             // Small lead so the line appears as it's sung, not just after.
             let line = lyrics.line(at: position(context.date) + 0.3) ?? ""
-            ZStack(alignment: .leading) {
+            ZStack(alignment: .topLeading) {
                 Text(line.isEmpty ? "♪" : line)
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(color.opacity(line.isEmpty ? 0.5 : 0.95))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
                     .id(line)
                     .transition(reduceMotion
                         ? .opacity
                         : .asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
                                       removal: .move(edge: .top).combined(with: .opacity)))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 15)
+            .frame(maxWidth: .infinity, minHeight: 30, maxHeight: 30, alignment: .topLeading)
             .clipped()
             .animation(.easeOut(duration: 0.28), value: line)
         }

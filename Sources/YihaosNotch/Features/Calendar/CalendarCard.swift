@@ -2,6 +2,10 @@ import SwiftUI
 
 /// A scrollable strip of days (a week either side of today) above the agenda for
 /// the selected day. Selection resets to today each time the notch opens.
+///
+/// There's no title row: the panel header already shows today's date, and the strip
+/// shows the selected day. When another day is selected, a slim line above the agenda
+/// names it and offers a way back to today.
 struct CalendarCard: View {
     @Environment(CalendarService.self) private var calendar
     @Environment(AppSettings.self) private var settings
@@ -13,9 +17,11 @@ struct CalendarCard: View {
     private var selectedDay: Date { selection ?? calendar.today }
     private var isTodaySelected: Bool { selectedDay == calendar.today }
 
+    /// Shared left inset for everything in the column, so text and colour bars line up.
+    static let inset: CGFloat = 6
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            header
+        VStack(alignment: .leading, spacing: 4) {
             switch calendar.access {
             case .granted:
                 DayStrip(days: calendar.days,
@@ -23,6 +29,10 @@ struct CalendarCard: View {
                          today: calendar.today,
                          haptics: settings.hapticsEnabled,
                          dots: dotColors(for:))
+                if !isTodaySelected {
+                    otherDayLine
+                        .transition(.opacity)
+                }
                 agenda
                     .id(selectedDay)
                     .transition(.opacity)
@@ -38,60 +48,38 @@ struct CalendarCard: View {
         .onAppear { calendar.start() }
     }
 
-    // MARK: Header
+    // MARK: Selected-day line
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+    private var otherDayLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
             Text(title(for: selectedDay))
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.primary)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.secondary)
             Text(selectedDay.formatted(.dateTime.day().month(.abbreviated)))
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(Theme.tertiary)
             Spacer(minLength: 4)
-            if calendar.access == .granted {
-                if !isTodaySelected {
-                    Button { selection = nil } label: {
-                        Text("Today")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(Theme.primary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(Theme.fillStrong))
-                    }
-                    .buttonStyle(PressableStyle())
-                    .transition(.opacity)
+            Button { selection = nil } label: {
+                HStack(spacing: 2) {
+                    Text("Today")
+                    Image(systemName: selectedDay > calendar.today ? "arrow.uturn.left" : "arrow.uturn.right")
+                        .font(.system(size: 8, weight: .bold))
                 }
-                stepButton("chevron.left", by: -1)
-                stepButton("chevron.right", by: 1)
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(Theme.primary)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Theme.fillStrong))
             }
+            .buttonStyle(PressableStyle())
+            .accessibilityLabel("Back to today")
         }
-        .padding(.leading, 4)
-        .frame(height: 20)
-    }
-
-    private func stepButton(_ symbol: String, by offset: Int) -> some View {
-        let cal = Calendar.current
-        // startOfDay: where DST begins at midnight, "+1 day" can land at 01:00.
-        let target = cal.date(byAdding: .day, value: offset, to: selectedDay).map(cal.startOfDay(for:))
-        let enabled = target.map { calendar.days.contains($0) } ?? false
-        return Button {
-            if let target, enabled { selection = target }
-        } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(enabled ? Theme.secondary : Theme.hairline)
-                .frame(width: 20, height: 20)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableStyle())
-        .disabled(!enabled)
-        .accessibilityLabel(offset < 0 ? "Previous day" : "Next day")
+        .padding(.horizontal, Self.inset)
+        .frame(height: 16)
     }
 
     private func title(for day: Date) -> String {
         let cal = Calendar.current
-        if cal.isDateInToday(day) { return "Today" }
         if cal.isDateInTomorrow(day) { return "Tomorrow" }
         if cal.isDateInYesterday(day) { return "Yesterday" }
         return day.formatted(.dateTime.weekday(.wide))
@@ -116,13 +104,13 @@ struct CalendarCard: View {
             Text(isTodaySelected ? "Nothing on today" : "No events")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.tertiary)
-                .padding(.leading, 4)
+                .padding(.leading, Self.inset)
                 .padding(.top, 6)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 1) {
+                    VStack(spacing: 0) {
                         ForEach(items) { item in
                             EventRow(item: item, day: selectedDay, now: calendar.now, isToday: isTodaySelected)
                                 .id(item.id)
@@ -140,7 +128,7 @@ struct CalendarCard: View {
                 .mask {
                     if agendaOverflows {
                         LinearGradient(stops: [.init(color: .black, location: 0),
-                                               .init(color: .black, location: 0.82),
+                                               .init(color: .black, location: 0.84),
                                                .init(color: .clear, location: 1)],
                                        startPoint: .top, endPoint: .bottom)
                     } else {
@@ -175,7 +163,7 @@ struct CalendarCard: View {
             }
             .buttonStyle(PressableStyle())
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, Self.inset)
         .padding(.top, 4)
     }
 }
@@ -184,13 +172,16 @@ struct CalendarCard: View {
 
 /// Five days in view, and the selected day always sits in the centre slot. Scrolling
 /// slides the days underneath it and selects whichever lands in the middle, like a
-/// picker wheel. Tapping a day or using the arrows slides that day to the centre.
+/// picker wheel. Tapping a day, or the arrows in the faded edges, slides that day to
+/// the centre.
 private struct DayStrip: View {
     let days: [Date]
     @Binding var selection: Date
     let today: Date
     let haptics: Bool
     let dots: (Date) -> [Color]
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let visibleDays = 5
     /// The day under the centre slot, as reported by (and used to drive) the scroll view.
@@ -199,6 +190,8 @@ private struct DayStrip: View {
     /// Only scrolls the user makes may change the selection; position reports from the
     /// scroll view's own initial layout are ignored.
     @State private var userHasScrolled = false
+
+    private var slide: Animation? { reduceMotion ? nil : .snappy(duration: 0.3) }
 
     var body: some View {
         GeometryReader { geo in
@@ -227,7 +220,9 @@ private struct DayStrip: View {
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $centered, anchor: .center)
             .onScrollPhaseChange { _, phase in
-                if phase == .interacting { userHasScrolled = true }
+                // Trackpad scrolls go through .interacting; a mouse wheel may only show
+                // up as .decelerating. Programmatic scrolls are .animating.
+                if phase == .interacting || phase == .decelerating { userHasScrolled = true }
             }
             .mask(
                 LinearGradient(stops: [.init(color: .clear, location: 0),
@@ -236,11 +231,20 @@ private struct DayStrip: View {
                                        .init(color: .clear, location: 1)],
                                startPoint: .leading, endPoint: .trailing)
             )
+            // The faded edges show only slivers of days, so the step arrows live there.
+            .overlay {
+                HStack {
+                    stepButton("chevron.left", by: -1)
+                    Spacer()
+                    stepButton("chevron.right", by: 1)
+                }
+                .padding(.top, 10)
+            }
         }
         .frame(height: 46)
         .onAppear { centered = selection }
         // The detent tick plays only for days reached by scrolling, like a picker wheel;
-        // taps, arrows and Today move the selection without it.
+        // taps and arrows move the selection without it.
         .onChange(of: centered) { _, day in
             guard userHasScrolled, let day, day != selection else { return }
             selection = day
@@ -250,8 +254,27 @@ private struct DayStrip: View {
         }
         .onChange(of: selection) { _, day in
             guard centered != day else { return }
-            withAnimation(.snappy(duration: 0.3)) { centered = day }
+            withAnimation(slide) { centered = day }
         }
+    }
+
+    private func stepButton(_ symbol: String, by offset: Int) -> some View {
+        let cal = Calendar.current
+        // startOfDay: where DST begins at midnight, "+1 day" can land at 01:00.
+        let target = cal.date(byAdding: .day, value: offset, to: selection).map(cal.startOfDay(for:))
+        let enabled = target.map { days.contains($0) } ?? false
+        return Button {
+            if let target, enabled { selection = target }
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(enabled ? Theme.secondary : Theme.hairline)
+                .frame(width: 22, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(!enabled)
+        .accessibilityLabel(offset < 0 ? "Previous day" : "Next day")
     }
 }
 
@@ -312,16 +335,17 @@ private struct EventRow: View {
     private var isOngoing: Bool { item.isOngoing(at: now) }
     private var hasEnded: Bool { item.hasEnded(at: now) }
     private var minutesUntilStart: Int { Int((item.start.timeIntervalSince(now) / 60).rounded(.up)) }
+    private var showsCountdown: Bool { isToday && (1..<60).contains(minutesUntilStart) }
     /// The Join button becomes solid from 10 minutes before the start.
     private var joinIsUrgent: Bool { isToday && (isOngoing || (0...10).contains(minutesUntilStart)) }
 
     var body: some View {
         Button { item.open() } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                     .fill(item.color)
-                    .frame(width: 3, height: 26)
-                VStack(alignment: .leading, spacing: 1) {
+                    .frame(width: 3, height: 24)
+                VStack(alignment: .leading, spacing: 0) {
                     Text(item.title)
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(Theme.primary)
@@ -331,13 +355,13 @@ private struct EventRow: View {
                         .foregroundStyle(isOngoing ? item.color : Theme.secondary)
                         .lineLimit(1)
                 }
-                Spacer(minLength: 6)
+                Spacer(minLength: 4)
                 if let meeting = item.meeting, !hasEnded {
-                    JoinPill(provider: meeting.provider, urgent: joinIsUrgent)
+                    JoinButton(provider: meeting.provider, urgent: joinIsUrgent)
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .padding(.horizontal, CalendarCard.inset)
+            .padding(.vertical, 3)
             .contentShape(Rectangle())
             .opacity(hasEnded && !item.isAllDay ? 0.42 : 1)
         }
@@ -362,33 +386,32 @@ private struct EventRow: View {
             text = "Now · until \(end)"
         } else if !startsThisDay {
             text = endsThisDay ? "Until \(end)" : "Continues · until \(end)"
-        } else if isToday, (1..<60).contains(minutesUntilStart) {
+        } else if showsCountdown {
             text = "\(start) · in \(minutesUntilStart)m"
         } else {
             text = "\(start) – \(end)"
         }
-        // A plain location is useful context; a meeting URL in the location field isn't.
-        if item.meeting == nil, let location = item.location, !location.contains("://") {
+        // A plain location is useful context, but not when a countdown already fills the
+        // line, and a meeting URL in the location field never is.
+        if item.meeting == nil, !showsCountdown, !(isToday && isOngoing),
+           let location = item.location, !location.contains("://") {
             text += " · \(location)"
         }
         return text
     }
 }
 
-private struct JoinPill: View {
+/// Icon-only, so event titles keep the room; the tooltip and VoiceOver name the service.
+private struct JoinButton: View {
     let provider: MeetingLink.Provider
     let urgent: Bool
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "video.fill")
-                .font(.system(size: 8.5, weight: .bold))
-            Text("Join")
-                .font(.system(size: 11, weight: .semibold))
-        }
-        .foregroundStyle(urgent ? Color.black : Theme.primary)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background(Capsule().fill(urgent ? Theme.primary : Theme.fillStrong))
+        Image(systemName: "video.fill")
+            .font(.system(size: 9.5, weight: .bold))
+            .foregroundStyle(urgent ? Color.black : Theme.primary)
+            .frame(width: 28, height: 20)
+            .background(Capsule().fill(urgent ? Theme.primary : Theme.fillStrong))
+            .accessibilityLabel("Join on \(provider.name)")
     }
 }

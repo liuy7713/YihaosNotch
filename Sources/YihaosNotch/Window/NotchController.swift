@@ -24,19 +24,27 @@ final class NotchController {
     private var armTask: Task<Void, Never>?
     private var closeTask: Task<Void, Never>?
     private var safetyTimer: Timer?
+    /// Global mouse-move monitor, installed only while armed or open. When closed,
+    /// the gesture window's tracking area reports the pointer reaching the notch, so
+    /// mouse movement elsewhere on the system costs the app nothing.
+    private var moveMonitor: Any?
+    /// After waking from sleep, a pointer that was left resting on the notch shouldn't
+    /// open it by itself.
+    private var armSuppressedUntil = Date.distantPast
 
     /// Development aid: `--preview-open` opens the panel at launch and keeps it open,
     /// so it can be screenshotted without hovering.
     private let pinnedOpen = CommandLine.arguments.contains("--preview-open")
     /// Development aid: `--preview-cycle` opens and closes the notch on a loop, so the
-    /// animations can be recorded and tuned.
+    /// animations can be recorded and tuned. Pointer-driven closing is off in this mode,
+    /// so the panel really stays open for the full interval.
     private let previewCycle = CommandLine.arguments.contains("--preview-cycle")
 
     /// Room around the open shape for its shadow. The panel window is exactly the open
     /// hit area, so clicks just outside the visible panel are never swallowed by a
     /// transparent margin.
     private let sidePadding: CGFloat = 10
-    private let bottomPadding: CGFloat = 12
+    private let bottomPadding: CGFloat = 14
 
     init(viewModel: NotchViewModel, settings: AppSettings, content: AnyView) {
         self.viewModel = viewModel
@@ -56,14 +64,16 @@ final class NotchController {
         // Windows above the menu bar can lose their ordering after sleep or a Space switch.
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: relayout))
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                self.armSuppressedUntil = .now + 1
+                self.layout()
+            }
+        })
         observers.append(workspace.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: relayout))
 
-        let moves: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
-        if let m = NSEvent.addGlobalMonitorForEvents(matching: moves, handler: { _ in
-            MainActor.assumeIsolated { self.pointerMoved() }
-        }) { monitors.append(m) }
         if let m = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown, handler: { _ in
             MainActor.assumeIsolated { self.clickedElsewhere() }
         }) { monitors.append(m) }
@@ -134,7 +144,7 @@ final class NotchController {
         armTask?.cancel()
         closeTask?.cancel()
         closeTask = nil
-        stopSafetyTimer()
+        stopPointerTracking()
         viewModel.state = .closed
         viewModel.showingCamera = false
         panel?.ignoresMouseEvents = true
@@ -157,10 +167,10 @@ final class NotchController {
         case .arming:
             rect = topCenteredRect(width: viewModel.closedWidth + 20, height: notch.height + 6)
         case .closed:
-            // With no activity the shape is just the notch: inset from its rounded bottom
-            // corners so the catcher never covers real pixels.
-            let width = viewModel.activity == nil ? notch.width - 20 : viewModel.closedWidth
-            rect = topCenteredRect(width: width, height: notch.height)
+            // Covers the whole closed shape, so its tracking area can report the pointer
+            // arriving (see `moveMonitor`). Over a bare notch it also covers the notch's
+            // rounded bottom corners: a few menu-bar pixels, at 0.01 alpha.
+            rect = topCenteredRect(width: viewModel.closedWidth, height: notch.height)
         }
         gesturePanel.setFrame(rect, display: false)
         gesturePanel.ignoresMouseEvents = false
@@ -206,9 +216,9 @@ final class NotchController {
         let p = NSEvent.mouseLocation
         switch viewModel.state {
         case .closed:
-            // Every pointer move on the system lands here; bail out cheaply when the
-            // pointer is nowhere near the top of the screen.
-            guard p.y > screenFrame.maxY - 60, closedHitRect.contains(p) else { return }
+            guard p.y > screenFrame.maxY - 60, closedHitRect.contains(p),
+                  Date.now >= armSuppressedUntil
+            else { return }
             // Dragging a file or a selection past the notch shouldn't open it.
             guard NSEvent.pressedMouseButtons == 0 else { return }
             arm()
@@ -218,7 +228,7 @@ final class NotchController {
             if openHitRect.contains(p) {
                 closeTask?.cancel()
                 closeTask = nil
-            } else if closeTask == nil {
+            } else if closeTask == nil, !previewCycle {
                 scheduleClose()
             }
         }
@@ -227,7 +237,7 @@ final class NotchController {
     /// Clicks on the notch itself land on the gesture window (see `updateGesturePanel`),
     /// so the global monitor only matters for closing the panel on an outside click.
     private func clickedElsewhere() {
-        guard viewModel.state == .open, !openHitRect.contains(NSEvent.mouseLocation) else { return }
+        guard viewModel.state == .open, !previewCycle, !openHitRect.contains(NSEvent.mouseLocation) else { return }
         close()
     }
 
@@ -252,7 +262,7 @@ final class NotchController {
 
     private func arm() {
         viewModel.state = .arming
-        startSafetyTimer()
+        startPointerTracking()
         guard settings.openTrigger == .hover else { return }
         armTask?.cancel()
         armTask = Task { [weak self, delay = settings.hoverDelay] in
@@ -265,7 +275,7 @@ final class NotchController {
     private func disarm() {
         armTask?.cancel()
         viewModel.state = .closed
-        stopSafetyTimer()
+        stopPointerTracking()
     }
 
     private func open() {
@@ -279,7 +289,7 @@ final class NotchController {
         if settings.hapticsEnabled {
             NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
         }
-        startSafetyTimer()
+        startPointerTracking()
         onOpen?()
     }
 
@@ -298,13 +308,18 @@ final class NotchController {
         closeTask = nil
         viewModel.state = .closed
         panel?.ignoresMouseEvents = true
-        stopSafetyTimer()
+        stopPointerTracking()
     }
 
-    /// Pointer exits are reported by tracking areas on both windows and by the global
-    /// monitor. This slow poll only guards against a missed event leaving the notch
-    /// stuck armed or open; it runs only in those states.
-    private func startSafetyTimer() {
+    /// While armed or open: a global monitor follows the pointer over other apps, and
+    /// tracking areas on both windows report it crossing ours. The slow poll only guards
+    /// against a missed event leaving the notch stuck armed or open.
+    private func startPointerTracking() {
+        if moveMonitor == nil {
+            moveMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { _ in
+                MainActor.assumeIsolated { self.pointerMoved() }
+            }
+        }
         guard safetyTimer == nil else { return }
         let timer = Timer(timeInterval: 0.25, repeats: true) { _ in
             MainActor.assumeIsolated { self.pointerMoved() }
@@ -314,7 +329,9 @@ final class NotchController {
         safetyTimer = timer
     }
 
-    private func stopSafetyTimer() {
+    private func stopPointerTracking() {
+        if let moveMonitor { NSEvent.removeMonitor(moveMonitor) }
+        moveMonitor = nil
         safetyTimer?.invalidate()
         safetyTimer = nil
     }

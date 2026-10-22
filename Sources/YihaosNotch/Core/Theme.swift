@@ -15,7 +15,9 @@ enum Theme {
     static let low = Color(red: 1.00, green: 0.38, blue: 0.34)
     static let today = Color(red: 1.00, green: 0.33, blue: 0.30)
 
-    static let open = Animation.spring(response: 0.42, dampingFraction: 0.80)
+    /// Overshoots by under 1%, so the shape plus its shadow stays inside the panel
+    /// window's margins even at the peak.
+    static let open = Animation.spring(response: 0.42, dampingFraction: 0.85)
     /// Slightly softer than before, with a whisper of overshoot so the shape settles
     /// into the notch rather than stopping dead. Any undershoot hides inside the
     /// hardware notch.
