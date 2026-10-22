@@ -94,10 +94,19 @@ final class NotchViewModel {
 
     // MARK: Geometry
 
-    /// Width of each side wing. Headphones get wider wings to fit the device name.
+    /// Width of each side wing: 40 normally, a little more for the timer's "mm:ss", and
+    /// just enough for a headphone name (both wings match, so the notch stays centred).
     var wingWidth: CGFloat {
-        if case .headphones = activity { return 92 }
-        return 40
+        switch activity {
+        case .headphones(let name, _):
+            let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+            let textWidth = (name as NSString).size(withAttributes: [.font: font]).width
+            return min(max(textWidth.rounded(.up) + 16, 40), 110)
+        case .timer:
+            return 48
+        default:
+            return 40
+        }
     }
 
     var closedWidth: CGFloat {

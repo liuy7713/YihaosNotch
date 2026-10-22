@@ -16,6 +16,20 @@ final class TimerService {
 
     @ObservationIgnored var onFinish: (() -> Void)?
     @ObservationIgnored private var fireTimer: Timer?
+    @ObservationIgnored private var observers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
+
+    init() {
+        // Run-loop timers don't count time spent asleep, so a timer that should have
+        // ended during sleep would fire late. Re-check on wake and on clock changes.
+        let resync: @Sendable (Notification) -> Void = { _ in
+            MainActor.assumeIsolated { self.resync() }
+        }
+        let workspace = NSWorkspace.shared.notificationCenter
+        observers.append((workspace, workspace.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: resync)))
+        observers.append((NotificationCenter.default, NotificationCenter.default.addObserver(
+            forName: .NSSystemClockDidChange, object: nil, queue: .main, using: resync)))
+    }
 
     /// Longest timer, so the countdown always fits the wing as "mm:ss".
     static let maxMinutes = 99
@@ -62,6 +76,12 @@ final class TimerService {
         phase = .idle
     }
 
+    /// Finishes a timer whose end has passed, or re-arms the one-shot for the time left.
+    private func resync() {
+        guard case .running(let end) = phase else { return }
+        if end <= .now { finish() } else { run(for: end.timeIntervalSinceNow) }
+    }
+
     private func run(for seconds: TimeInterval) {
         let end = Date.now + seconds
         phase = .running(end: end)
@@ -77,6 +97,8 @@ final class TimerService {
     }
 
     private func finish() {
+        guard isActive else { return }
+        fireTimer?.invalidate()
         phase = .idle
         NSSound(named: "Glass")?.play()
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)

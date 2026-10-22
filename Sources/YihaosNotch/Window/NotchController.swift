@@ -93,6 +93,12 @@ final class NotchController {
         }
     }
 
+    /// True while the closed notch is on screen and could show a live activity, i.e.
+    /// not hidden (lid closed, no notch) and not covered by the open panel.
+    var canShowLiveActivity: Bool {
+        screenFrame != .zero && viewModel.state != .open
+    }
+
     // MARK: Layout
 
     /// Places the panels at the top centre of the built-in display, or hides them and

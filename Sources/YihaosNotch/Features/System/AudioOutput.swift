@@ -30,6 +30,13 @@ enum AudioOutput {
         set(device, kAudioHardwareServiceDeviceProperty_VirtualMainVolume, &value)
     }
 
+    static func canSetMute(of device: AudioDeviceID) -> Bool {
+        var address = address(kAudioDevicePropertyMute, kAudioDevicePropertyScopeOutput)
+        var settable = DarwinBoolean(false)
+        return AudioObjectHasProperty(device, &address)
+            && AudioObjectIsPropertySettable(device, &address, &settable) == noErr && settable.boolValue
+    }
+
     static func isMuted(_ device: AudioDeviceID) -> Bool {
         var value = UInt32(0)
         return get(device, kAudioDevicePropertyMute, into: &value) && value != 0
@@ -98,7 +105,14 @@ final class HeadphoneMonitor {
         guard let device = AudioOutput.defaultDevice, device != lastDevice else { return }
         lastDevice = device
         guard AudioOutput.isBluetooth(device), let name = AudioOutput.name(of: device) else { return }
-        onConnect?(name, Self.symbol(for: name))
+        onConnect?(Self.displayName(for: name), Self.symbol(for: name))
+    }
+
+    /// macOS names devices after their owner ("Yihao's AirPods Pro"); the icon already
+    /// says whose they are, so show just the model.
+    static func displayName(for name: String) -> String {
+        let stripped = name.replacing(/^.+?['’]s\s+/, with: "")
+        return stripped.isEmpty ? name : stripped
     }
 
     static func symbol(for name: String) -> String {

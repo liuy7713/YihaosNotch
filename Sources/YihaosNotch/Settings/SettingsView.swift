@@ -63,11 +63,14 @@ struct SettingsView: View {
             Section {
                 Toggle("Show volume and brightness in the notch", isOn: $settings.replaceSystemHUD)
                     .onChange(of: settings.replaceSystemHUD) { _, enabled in
-                        if enabled { mediaKeys.enable() } else { mediaKeys.disable() }
+                        if enabled { mediaKeys.enable(prompt: true) } else { mediaKeys.disable() }
                     }
                 if settings.replaceSystemHUD && !mediaKeys.isRunning {
                     LabeledContent("Needs Accessibility permission to catch the keys") {
-                        Button("Open Settings…") { mediaKeys.openAccessibilitySettings() }
+                        Button("Open Settings…") {
+                            mediaKeys.refreshPermission()
+                            mediaKeys.openAccessibilitySettings()
+                        }
                     }
                     .foregroundStyle(.secondary)
                 }
@@ -75,7 +78,7 @@ struct SettingsView: View {
             } header: {
                 Text("Volume and devices")
             } footer: {
-                Text("Replaces the system's volume and brightness pop-up with a small indicator in the notch.")
+                Text("Replaces the system's volume and brightness pop-up with a small indicator in the notch. While the panel is open, macOS shows its own. The volume-change sound isn't played.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -52,12 +52,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         controller.start()
         self.controller = controller
+        mediaKeys.canShowHUD = { [weak controller] in controller?.canShowLiveActivity ?? false }
 
         nowPlaying.start()
         battery.start()
         if settings.calendarEnabled { calendar.start() }
         headphones.start()
-        if settings.replaceSystemHUD { mediaKeys.enable() }
+        // Silent at launch: the permission prompt only ever comes from the Settings toggle.
+        if settings.replaceSystemHUD { mediaKeys.enable(prompt: false) }
         runPreviewFlags()
     }
 

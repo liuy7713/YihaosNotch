@@ -39,7 +39,7 @@ struct OpenPanelView: View {
                     Text(context.date.formatted(.dateTime
                         .weekday(timer.isActive ? .abbreviated : .wide).day().month(.abbreviated)))
                         .foregroundStyle(Theme.secondary)
-                    clockButton(now: context.date)
+                    ClockButton(now: context.date)
                 }
                 .font(.system(size: 12, weight: .semibold))
             }
@@ -62,40 +62,6 @@ struct OpenPanelView: View {
         }
         .padding(.horizontal, 22)
         .frame(height: model.notchSize.height)
-    }
-
-    /// The clock doubles as the way into the timer, so the timer needs no button of its
-    /// own. While one runs, its countdown sits beside the time.
-    private func clockButton(now: Date) -> some View {
-        Button {
-            model.showingTimer.toggle()
-            model.showingCamera = false
-        } label: {
-            HStack(spacing: 6) {
-                Text(now.time24)
-                    .foregroundStyle(Theme.primary)
-                if timer.isActive {
-                    let isPaused: Bool = if case .paused = timer.phase { true } else { false }
-                    TimelineView(.animation(minimumInterval: 1, paused: isPaused)) { context in
-                        HStack(spacing: 3) {
-                            Image(systemName: "timer")
-                                .font(.system(size: 10, weight: .bold))
-                            Text(timer.remaining(at: context.date).countdownText)
-                        }
-                        .foregroundStyle(Theme.secondary)
-                    }
-                }
-            }
-            .monospacedDigit()
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(model.showingTimer ? Theme.fillStrong : .clear))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(PressableStyle())
-        .hoverHighlight(cornerRadius: 10)
-        .help("Timer")
-        .accessibilityLabel(timer.isActive ? "Timer running" : "Timer")
     }
 
     private var batteryIndicator: some View {
@@ -148,5 +114,54 @@ private struct ClockView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// The header clock, which doubles as the way into the timer, so the timer needs no
+/// button of its own. Hovering reveals a timer glyph to say what it does; while a
+/// timer runs, its countdown sits beside the time.
+private struct ClockButton: View {
+    let now: Date
+
+    @Environment(NotchViewModel.self) private var model
+    @Environment(TimerService.self) private var timer
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            model.showingTimer.toggle()
+            model.showingCamera = false
+        } label: {
+            HStack(spacing: 6) {
+                Text(now.time24)
+                    .foregroundStyle(Theme.primary)
+                if timer.isActive {
+                    let isPaused: Bool = if case .paused = timer.phase { true } else { false }
+                    TimelineView(.animation(minimumInterval: 1, paused: isPaused)) { context in
+                        HStack(spacing: 3) {
+                            Image(systemName: "timer")
+                                .font(.system(size: 10, weight: .bold))
+                            Text(timer.remaining(at: context.date).countdownText)
+                        }
+                        .foregroundStyle(Theme.secondary)
+                    }
+                } else if hovering || model.showingTimer {
+                    Image(systemName: "timer")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Theme.secondary)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                }
+            }
+            .monospacedDigit()
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(model.showingTimer ? Theme.fillStrong : hovering ? Theme.fill : .clear))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressableStyle())
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+        .help("Timer")
+        .accessibilityLabel(timer.isActive ? "Timer running" : "Timer")
     }
 }
