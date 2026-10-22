@@ -1,0 +1,93 @@
+import AppKit
+
+/// A single countdown timer. While it runs, the closed notch shows it in the wings.
+@MainActor
+@Observable
+final class TimerService {
+    enum Phase: Equatable {
+        case idle
+        case running(end: Date)
+        case paused(remaining: TimeInterval)
+    }
+
+    private(set) var phase: Phase = .idle
+    /// The full length, for the progress bar.
+    private(set) var total: TimeInterval = 0
+
+    @ObservationIgnored var onFinish: (() -> Void)?
+    @ObservationIgnored private var fireTimer: Timer?
+
+    /// Longest timer, so the countdown always fits the wing as "mm:ss".
+    static let maxMinutes = 99
+
+    var isActive: Bool { phase != .idle }
+
+    func remaining(at date: Date = .now) -> TimeInterval {
+        switch phase {
+        case .idle: 0
+        case .running(let end): max(end.timeIntervalSince(date), 0)
+        case .paused(let remaining): remaining
+        }
+    }
+
+    func start(minutes: Int) {
+        total = TimeInterval(min(minutes, Self.maxMinutes) * 60)
+        run(for: total)
+    }
+
+    func pause() {
+        guard case .running = phase else { return }
+        phase = .paused(remaining: remaining())
+        fireTimer?.invalidate()
+    }
+
+    func resume() {
+        guard case .paused(let remaining) = phase else { return }
+        run(for: remaining)
+    }
+
+    func addMinute() {
+        let cap = TimeInterval(Self.maxMinutes * 60)
+        let added = min(remaining() + 60, cap)
+        total = max(total, added)
+        switch phase {
+        case .running: run(for: added)
+        case .paused: phase = .paused(remaining: added)
+        case .idle: break
+        }
+    }
+
+    func cancel() {
+        fireTimer?.invalidate()
+        phase = .idle
+    }
+
+    private func run(for seconds: TimeInterval) {
+        let end = Date.now + seconds
+        phase = .running(end: end)
+        fireTimer?.invalidate()
+        // A one-shot timer at the end: nothing ticks while the countdown runs; the views
+        // that show it schedule their own once-a-second redraw while visible.
+        let timer = Timer(fire: end, interval: 0, repeats: false) { _ in
+            MainActor.assumeIsolated { self.finish() }
+        }
+        timer.tolerance = 0.1
+        RunLoop.main.add(timer, forMode: .common)
+        fireTimer = timer
+    }
+
+    private func finish() {
+        phase = .idle
+        NSSound(named: "Glass")?.play()
+        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+        onFinish?()
+    }
+}
+
+extension TimeInterval {
+    /// 754 → "12:34". Rounds up, so a timer shows 0:00 only when it's done.
+    var countdownText: String {
+        let total = Int(self.rounded(.up))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}

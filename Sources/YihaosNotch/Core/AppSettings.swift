@@ -32,6 +32,14 @@ final class AppSettings {
     var calendarEnabled: Bool {
         didSet { defaults.set(calendarEnabled, forKey: Key.calendar) }
     }
+    /// Volume and brightness keys show in the notch instead of the system pop-up.
+    /// Needs Accessibility permission, so it's off until turned on in Settings.
+    var replaceSystemHUD: Bool {
+        didSet { defaults.set(replaceSystemHUD, forKey: Key.systemHUD) }
+    }
+    var showHeadphonesActivity: Bool {
+        didSet { defaults.set(showHeadphonesActivity, forKey: Key.headphones) }
+    }
     /// How long before an event the notch shows a countdown. 0 turns it off.
     var eventReminderMinutes: Int {
         didSet { defaults.set(eventReminderMinutes, forKey: Key.eventReminder) }
@@ -47,6 +55,8 @@ final class AppSettings {
             Key.batteryActivity: true,
             Key.calendar: true,
             Key.eventReminder: 5,
+            Key.systemHUD: false,
+            Key.headphones: true,
         ])
         openTrigger = OpenTrigger(rawValue: d.string(forKey: Key.openTrigger) ?? "") ?? .hover
         hoverDelay = d.double(forKey: Key.hoverDelay)
@@ -55,6 +65,8 @@ final class AppSettings {
         showBatteryActivity = d.bool(forKey: Key.batteryActivity)
         calendarEnabled = d.bool(forKey: Key.calendar)
         eventReminderMinutes = d.integer(forKey: Key.eventReminder)
+        replaceSystemHUD = d.bool(forKey: Key.systemHUD)
+        showHeadphonesActivity = d.bool(forKey: Key.headphones)
     }
 
     private enum Key {
@@ -65,5 +77,7 @@ final class AppSettings {
         static let batteryActivity = "showBatteryActivity"
         static let calendar = "calendarEnabled"
         static let eventReminder = "eventReminderMinutes"
+        static let systemHUD = "replaceSystemHUD"
+        static let headphones = "showHeadphonesActivity"
     }
 }

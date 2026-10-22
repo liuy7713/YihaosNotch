@@ -147,6 +147,7 @@ final class NotchController {
         stopPointerTracking()
         viewModel.state = .closed
         viewModel.showingCamera = false
+        viewModel.showingTimer = false
         panel?.ignoresMouseEvents = true
         panel?.orderOut(nil)
         gesturePanel?.orderOut(nil)
@@ -284,6 +285,7 @@ final class NotchController {
         closeTask = nil
         guard viewModel.state != .open, screenFrame != .zero else { return }
         viewModel.showingCamera = false
+        viewModel.showingTimer = false
         viewModel.state = .open
         panel?.ignoresMouseEvents = false
         if settings.hapticsEnabled {

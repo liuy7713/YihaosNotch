@@ -11,7 +11,9 @@ A personal replacement for Boring Notch on the MacBook Pro's built-in display.
 
 Launch with `--preview-open` to pin the panel open (useful for screenshots), or
 `--preview-cycle` to open and close it every 1.5 s (useful for recording and tuning
-the animations, e.g. with `screencapture -v`):
+the animations, e.g. with `screencapture -v`). `--preview-timer` starts a 25-minute
+timer and shows the timer view; `--preview-hud` cycles the volume, brightness and
+headphone indicators with sample values (the real volume and brightness are untouched):
 
 ```sh
 open "build/Yihao's Notch.app" --args --preview-open
@@ -34,4 +36,6 @@ keeps Calendar/Camera/Automation permissions across rebuilds.
 | `Features/Calendar` | EventKit events, meeting-link detection (Zoom/Teams/Meet/Webex) |
 | `Features/Battery` | IOKit power-source notifications |
 | `Features/Camera` | Mirror; the camera runs only while the mirror is visible |
+| `Features/System` | Volume/brightness keys (event tap, opt-in), headphone connection |
+| `Features/Timer` | Countdown timer, opened from the header clock |
 | `Settings/` | Settings window |

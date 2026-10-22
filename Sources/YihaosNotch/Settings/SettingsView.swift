@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var settings: AppSettings
     let calendar: CalendarService
+    let mediaKeys: MediaKeyController
 
     @State private var loginItemStatus = SMAppService.mainApp.status
 
@@ -60,6 +61,26 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("Show volume and brightness in the notch", isOn: $settings.replaceSystemHUD)
+                    .onChange(of: settings.replaceSystemHUD) { _, enabled in
+                        if enabled { mediaKeys.enable() } else { mediaKeys.disable() }
+                    }
+                if settings.replaceSystemHUD && !mediaKeys.isRunning {
+                    LabeledContent("Needs Accessibility permission to catch the keys") {
+                        Button("Open Settings…") { mediaKeys.openAccessibilitySettings() }
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                Toggle("Show when headphones connect", isOn: $settings.showHeadphonesActivity)
+            } header: {
+                Text("Volume and devices")
+            } footer: {
+                Text("Replaces the system's volume and brightness pop-up with a small indicator in the notch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Toggle("Launch at login", isOn: launchAtLogin)
                 // macOS can accept the registration but hold it until the user approves
                 // it in Login Items, so the toggle alone would claim it's on.
@@ -78,7 +99,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 520)
+        .frame(width: 460, height: 600)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // Picks up an approval made in System Settings while this window was open.
             loginItemStatus = SMAppService.mainApp.status
