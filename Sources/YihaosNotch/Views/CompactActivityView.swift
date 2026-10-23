@@ -27,11 +27,19 @@ struct CompactActivityView: View {
             ArtworkView(image: nowPlaying.artwork, size: 20, cornerRadius: 5)
         case .charging:
             // Reads the live state: macOS reports "not charging" for a moment after the
-            // charger connects, and stays there when full or holding at the optimised limit.
-            Image(systemName: battery.isCharging ? "bolt.fill" : "powerplug.portrait.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(battery.isCharging ? Theme.charge : Theme.secondary)
-                .contentTransition(.symbolEffect(.replace))
+            // charger connects, and stays there when full or holding at the charge limit.
+            let status = Self.chargeStatus(battery.powerState)
+            HStack(spacing: 4) {
+                Image(systemName: status.symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .contentTransition(.symbolEffect(.replace))
+                Text(status.label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .contentTransition(.opacity)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(status.color)
+            .animation(.easeOut(duration: 0.25), value: battery.powerState)
         case .lowBattery(let level):
             BatteryGlyph(level: level, charging: false)
                 .scaleEffect(0.85)
@@ -70,10 +78,20 @@ struct CompactActivityView: View {
         switch activity {
         case .music:
             AudioBars(color: nowPlaying.accent, isPlaying: nowPlaying.isPlaying)
-        case .charging(let level):
-            Text("\(level)%")
-                .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                .foregroundStyle(Theme.primary)
+        case .charging:
+            // The charger's rating, which macOS knows a moment after it connects.
+            HStack(spacing: 5) {
+                if let watts = battery.adapterWatts {
+                    Text("\(watts) W")
+                        .foregroundStyle(Theme.secondary)
+                        .transition(.opacity)
+                }
+                Text("\(battery.level)%")
+                    .foregroundStyle(Theme.primary)
+            }
+            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+            .lineLimit(1)
+            .animation(.easeOut(duration: 0.25), value: battery.adapterWatts)
         case .lowBattery(let level):
             Text("\(level)%")
                 .font(.system(size: 12, weight: .semibold).monospacedDigit())
@@ -109,6 +127,27 @@ struct CompactActivityView: View {
                 .foregroundStyle(Theme.primary)
         }
     }
+
+    /// Symbol, word and colour for the charging wings. "Charging" and "Charged" are
+    /// green like the battery's fill; "Plugged In" (on power, not charging) stays grey.
+    static func chargeStatus(_ state: PowerState) -> (symbol: String, label: String, color: Color) {
+        switch state {
+        case .charging: ("bolt.fill", "Charging", Theme.charge)
+        case .charged: ("powerplug.portrait.fill", "Charged", Theme.charge)
+        case .pluggedIn: ("powerplug.portrait.fill", "Plugged In", Theme.secondary)
+        case .battery: ("powerplug.portrait", "Unplugged", Theme.secondary)
+        }
+    }
+
+    /// Wide enough for the longest charging word and "100 W 100%", so the wings don't
+    /// change size when the state flips from "Plugged In" to "Charging".
+    static let chargingWingWidth: CGFloat = {
+        let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        func width(_ text: String) -> CGFloat { (text as NSString).size(withAttributes: [.font: font]).width }
+        let left = 15 + 4 + ["Charging", "Charged", "Plugged In", "Unplugged"].map(width).max()!
+        let right = width("100 W") + 5 + width("100%")
+        return (max(left, right) + 14).rounded(.up)
+    }()
 
     private static func speakerSymbol(level: Float, muted: Bool) -> String {
         if muted || level <= 0 { return "speaker.slash.fill" }

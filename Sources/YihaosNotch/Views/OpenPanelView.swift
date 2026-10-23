@@ -79,20 +79,47 @@ struct OpenPanelView: View {
 
     private var batteryIndicator: some View {
         HStack(spacing: 5) {
-            if battery.isCharging {
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Theme.charge)
-            } else if battery.isPluggedIn {
-                // On power but not charging (full, or holding at the optimised limit).
-                Image(systemName: "powerplug.portrait.fill")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Theme.secondary)
+            if battery.isPluggedIn {
+                let status = CompactActivityView.chargeStatus(battery.powerState)
+                HStack(spacing: 3) {
+                    Image(systemName: status.symbol)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(status.color)
+                    // Live power coming in; the charger's rating until that's known.
+                    if let watts = battery.inputWatts.map({ Int($0.rounded()) }) ?? battery.adapterWatts {
+                        Text("\(watts) W")
+                            .font(.system(size: 11, weight: .medium).monospacedDigit())
+                            .foregroundStyle(Theme.tertiary)
+                            .contentTransition(.numericText())
+                    }
+                }
+                .animation(.easeOut(duration: 0.25), value: battery.inputWatts.map { Int($0.rounded()) })
             }
             Text("\(battery.level)%")
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                 .foregroundStyle(Theme.secondary)
             BatteryGlyph(level: battery.level, charging: battery.isCharging)
+        }
+        .help(powerDescription)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Battery \(battery.level)%. \(powerDescription)")
+        .onAppear { battery.beginLiveReadings() }
+        .onDisappear { battery.endLiveReadings() }
+    }
+
+    /// The full story for the tooltip, e.g. "Charging at 42 W from a 65 W charger".
+    private var powerDescription: String {
+        let input = battery.inputWatts.map { "\(Int($0.rounded())) W" }
+        let charger = battery.adapterWatts.map { "\($0) W charger" }
+        switch battery.powerState {
+        case .battery:
+            return "On battery"
+        case .charging:
+            return (input.map { "Charging at \($0)" } ?? "Charging") + (charger.map { " from a \($0)" } ?? "")
+        case .charged:
+            return "Fully charged" + (charger.map { ", on a \($0)" } ?? "")
+        case .pluggedIn:
+            return "Plugged in, not charging" + (charger.map { ", on a \($0)" } ?? "")
         }
     }
 

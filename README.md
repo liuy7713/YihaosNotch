@@ -6,7 +6,8 @@ when you want it.
 
 **Closed**, the notch grows small "wings" either side for whatever matters right now:
 the album art and bars of what's playing, a countdown before your next event, a
-running timer, the charger connecting, or your AirPods switching on.
+running timer, the charger connecting (charging or just plugged in, and the charger's
+wattage), or your AirPods switching on.
 
 **Open** (rest the pointer on the notch, click it, or swipe down on it with two
 fingers), it shows:
@@ -103,8 +104,10 @@ To give the app to someone, build a disk image:
 ```
 
 They open it, drag the app into Applications, and the welcome screen takes it from
-there: no Terminal, no Xcode. Raise `CFBundleShortVersionString` and `CFBundleVersion`
-in `Resources/Info.plist` before each release. The first run asks whether the script
+there: no Terminal, no Xcode. Before each release, raise the version with
+`./scripts/bump-version.sh patch|minor|major` (fixes, features, big changes); it also
+raises the build number, which macOS uses to tell which copy is newer. Each release is
+tagged `v<version>` in git. The first run asks whether the script
 may control Finder, which it uses to lay out the disk image window.
 
 **Without a Developer ID** (today), the image is signed with the local identity. It
@@ -136,7 +139,7 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--preview-timer` | Starts a 25-minute timer and shows the timer view. |
 | `--preview-swap` | Flips the right column between calendar and timer every 2 s. |
 | `--preview-welcome N` | Shows the welcome screen at page N (0–2), even if it has been finished. |
-| `--preview-hud` | Cycles the volume, brightness and headphone indicators with sample values. The real volume and brightness are untouched. |
+| `--preview-hud` | Cycles the volume, brightness, headphone and charging indicators (charging shows the real power state). The real volume and brightness are untouched. |
 
 The media-key handling logs to the unified log:
 `log stream --predicate 'subsystem == "com.yihao.YihaosNotch"' --level debug`.

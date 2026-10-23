@@ -86,8 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Development aids for checking visuals without pressing keys or clicking:
     /// `--preview-timer` starts a 25-minute timer and shows the timer view when the panel
-    /// opens; `--preview-swap` (below); `--preview-hud` cycles the volume, brightness and headphone indicators with
-    /// sample values (the real volume and brightness are never touched).
+    /// opens; `--preview-swap` (below); `--preview-hud` cycles the volume, brightness, headphone and charging indicators
+    /// (the charging one shows the real power state) with sample values (the real volume and brightness are never touched).
     private func runPreviewFlags() {
         let arguments = CommandLine.arguments
         if arguments.contains("--preview-timer") {
@@ -113,6 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .volume(level: 0.5, muted: false),
                     .brightness(level: 0.75),
                     .headphones(name: "AirPods Pro", symbol: HeadphoneMonitor.symbol(for: "AirPods Pro")),
+                    .charging(level: 0),
                 ]
                 while true {
                     for sample in samples {

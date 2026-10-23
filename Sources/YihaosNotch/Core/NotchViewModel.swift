@@ -117,6 +117,8 @@ final class NotchViewModel {
             return min(max(textWidth.rounded(.up) + 16, 40), 110)
         case .timer:
             return 48
+        case .charging:
+            return CompactActivityView.chargingWingWidth
         default:
             return 40
         }
