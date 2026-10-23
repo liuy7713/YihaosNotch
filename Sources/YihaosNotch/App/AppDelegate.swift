@@ -62,7 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let welcoming = settings.needsWelcome
         if !welcoming { nowPlaying.start() }
         battery.start()
-        if settings.calendarEnabled { calendar.start(requestingAccess: !welcoming) }
+        // Never asks at launch (which is often login): the welcome, the notch's Connect
+        // Calendar button and Settings ask, when the user is looking.
+        if settings.calendarEnabled { calendar.start(requestingAccess: false) }
         headphones.start()
         // Silent at launch: the permission prompt only ever comes from a toggle.
         if settings.replaceSystemHUD { mediaKeys.enable(prompt: false) }
@@ -122,9 +124,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // Opening the app again (e.g. from Finder or Spotlight) shows Settings.
+    // Opening the app again (e.g. from Finder or Spotlight) shows Settings, or the
+    // welcome if it hasn't been finished.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        SettingsWindowController.shared.show()
+        if settings.needsWelcome {
+            WelcomeWindowController.shared.show()
+        } else {
+            SettingsWindowController.shared.show()
+        }
         return false
     }
 }

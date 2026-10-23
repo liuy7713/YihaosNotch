@@ -16,7 +16,7 @@ struct NotchDemo: View {
 
     private let screenSize = CGSize(width: 280, height: 178)
     private let closedSize = CGSize(width: 62, height: 13)
-    private let openSize = CGSize(width: 210, height: 76)
+    private let openSize = CGSize(width: 190, height: 70)
 
     enum PointerSpot {
         case away, notch, leaving
@@ -37,6 +37,10 @@ struct NotchDemo: View {
                                      startPoint: .top, endPoint: .bottom))
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Theme.hairline)
+            // A faint menu bar, so it reads as the top of a screen.
+            Rectangle()
+                .fill(Color.white.opacity(0.07))
+                .frame(height: closedSize.height)
 
             notch
 

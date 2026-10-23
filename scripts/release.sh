@@ -45,6 +45,10 @@ IDENTITY="${CODESIGN_IDENTITY:-}"
 if [[ -z "$IDENTITY" ]]; then
   IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p' | head -1)"
 fi
+if [[ -n "$IDENTITY" && "$IDENTITY" != "Developer ID Application: "* ]]; then
+  echo "error: CODESIGN_IDENTITY must be a \"Developer ID Application: …\" certificate; only those can be notarized." >&2
+  exit 1
+fi
 NOTARIZE=false
 if [[ -n "$IDENTITY" ]]; then
   echo "Releasing $VERSION ($BUILD), signed with: $IDENTITY"
@@ -68,9 +72,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# notarytool can finish with "Invalid" and still exit 0, so the status is checked.
 notarize() {
   echo "Notarizing ${1:t} (usually a few minutes)…"
-  xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait
+  local out
+  out="$(xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1)" || true
+  print -r -- "$out"
+  if [[ "$out" != *"status: Accepted"* ]]; then
+    local id="$(print -r -- "$out" | sed -n 's/^ *id: //p' | head -1)"
+    echo "error: Apple didn't accept ${1:t}. The reason:" >&2
+    echo "  xcrun notarytool log ${id:-<id>} --keychain-profile $NOTARY_PROFILE" >&2
+    exit 1
+  fi
 }
 
 if $NOTARIZE; then
@@ -88,7 +101,8 @@ ditto "$APP" "$STAGE/$APP_NAME.app"
 ln -s /Applications "$STAGE/Applications"
 swift "$ROOT/scripts/dmg/render-background.swift" "$WORK/bg.png" 1
 swift "$ROOT/scripts/dmg/render-background.swift" "$WORK/bg@2x.png" 2
-tiffutil -cathidpicheck "$WORK/bg.png" "$WORK/bg@2x.png" -out "$STAGE/.background/background.tiff" >/dev/null 2>&1
+tiffutil -cathidpicheck "$WORK/bg.png" "$WORK/bg@2x.png" -out "$STAGE/.background/background.tiff" >/dev/null 2>&1 \
+  || { echo "error: couldn't combine the background images." >&2; exit 1; }
 # The disk's own icon (in Finder's sidebar and on the desktop) is the app icon.
 cp "$ROOT/Resources/AppIcon.icns" "$STAGE/.VolumeIcon.icns"
 
@@ -117,7 +131,6 @@ tell application "Finder"
     set position of item "$APP_NAME.app" of container window to {150, 175}
     set position of item "Applications" of container window to {410, 175}
     update without registering applications
-    delay 1
     close
   end tell
 end tell
@@ -125,32 +138,64 @@ OSA
 then
   echo "warning: couldn't style the disk image window (was controlling Finder allowed?)."
 fi
+# Finder writes .DS_Store on its own schedule; give it up to 10 s.
+for _ in {1..20}; do
+  [[ -f "/Volumes/$VOLUME_NAME/.DS_Store" ]] && break
+  sleep 0.5
+done
+[[ -f "/Volumes/$VOLUME_NAME/.DS_Store" ]] || echo "warning: Finder didn't save the window layout; the image will be unstyled."
 chflags hidden "/Volumes/$VOLUME_NAME/.background" 2>/dev/null || true
+rm -rf "/Volumes/$VOLUME_NAME/.fseventsd"
 sync
-hdiutil detach "$DEVICE" -quiet
-DEVICE=""
+# Spotlight or Finder can hold the new volume for a moment.
+for attempt in {1..5}; do
+  hdiutil detach "$DEVICE" -quiet 2>/dev/null && { DEVICE=""; break; }
+  sleep 1
+done
+if [[ -n "$DEVICE" ]]; then
+  hdiutil detach "$DEVICE" -quiet -force
+  DEVICE=""
+fi
 
+# Everything up to notarization happens in the scratch folder; only a finished image
+# reaches dist/, so a failed run never leaves one behind that could be sent out.
+OUT="$WORK/${DMG:t}"
+hdiutil convert -quiet "$WORK/rw.dmg" -format ULFO -o "$OUT"
+if $NOTARIZE; then
+  codesign --sign "$IDENTITY" --timestamp "$OUT"
+  notarize "$OUT"
+  xcrun stapler staple "$OUT"
+  spctl --assess --type open --context context:primary-signature --verbose "$OUT"
+fi
 mkdir -p "$DIST"
-hdiutil convert -quiet "$WORK/rw.dmg" -format ULFO -o "$DMG"
+mv "$OUT" "$DMG"
 
 if $NOTARIZE; then
-  codesign --sign "$IDENTITY" --timestamp "$DMG"
-  notarize "$DMG"
-  xcrun stapler staple "$DMG"
-  spctl --assess --type open --context context:primary-signature --verbose "$DMG"
   rm -f "$DIST/HOW-TO-OPEN.txt"
 else
   cat > "$DIST/HOW-TO-OPEN.txt" <<'TXT'
 Installing Yihao's Notch
 
-1. Open the .dmg and drag Yihao's Notch into Applications.
-2. Open it from Applications. macOS will say it can't check the app for malicious
-   software, because it isn't from the App Store or a registered developer.
-   Click Done.
-3. Open System Settings > Privacy & Security, scroll down to the message about
-   Yihao's Notch, and click Open Anyway. Confirm with your password or Touch ID.
+It isn't from the App Store or a registered Apple developer, so macOS can't check who
+made it and asks you to confirm once that you trust it. That's expected, not a fault.
 
-You only need to do this once. It needs a MacBook with a notch and macOS 15 or later.
+1. Open the .dmg file and drag Yihao's Notch into the Applications folder.
+
+2. Open Yihao's Notch from Applications. macOS says:
+     "Yihao's Notch" Not Opened. Apple could not verify "Yihao's Notch" is free of
+     malware that may harm your Mac or compromise your privacy.
+   Click Done.
+
+3. Open System Settings > Privacy & Security and scroll to the bottom, under
+   Security. Next to "Yihao's Notch" was blocked..., click Open Anyway and enter your
+   Mac's password (or use Touch ID). If you don't see it, open the app once more and
+   come back: the button only shows for about an hour after macOS blocks the app.
+
+4. macOS asks one last time: click Open Anyway.
+
+The welcome screen takes it from there. You'll need an administrator account for step
+3, and to repeat steps 2-4 for each new version. It works on MacBooks with a notch
+running macOS 15 or later.
 TXT
 fi
 

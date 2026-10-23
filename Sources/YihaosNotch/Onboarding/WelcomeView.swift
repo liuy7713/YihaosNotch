@@ -6,11 +6,11 @@ struct WelcomeView: View {
     let settings: AppSettings
     let calendar: CalendarService
     let mediaKeys: MediaKeyController
+    let permissions: WelcomePermissions
     let onFinish: () -> Void
 
     @State private var page = WelcomeView.previewPage
     @State private var forward = true
-    @State private var permissions = WelcomePermissions()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let pageCount = 3
@@ -42,9 +42,9 @@ struct WelcomeView: View {
         .frame(width: 640, height: 470)
         .background(Color.black)
         .preferredColorScheme(.dark)
-        .onAppear { permissions.startWatching() }
-        .onDisappear { permissions.stopWatching() }
     }
+
+    private var isLastPage: Bool { page == pageCount - 1 }
 
     private var footer: some View {
         HStack(spacing: 6) {
@@ -62,11 +62,15 @@ struct WelcomeView: View {
                 Button("Back") { go(to: page - 1) }
                     .buttonStyle(WelcomeTextButtonStyle())
             }
-            Button(page == pageCount - 1 ? "Start Using Yihao's Notch" : "Continue") {
-                if page == pageCount - 1 { onFinish() } else { go(to: page + 1) }
+            // Reopened from Settings, it's just being looked at again.
+            let finishTitle = settings.needsWelcome ? "Start Using Yihao's Notch" : "Done"
+            Button(isLastPage ? finishTitle : "Continue") {
+                if isLastPage { onFinish() } else { go(to: page + 1) }
             }
             .buttonStyle(WelcomePrimaryButtonStyle())
-            .keyboardShortcut(.defaultAction)
+            // Return moves on, but never finishes: a Return typed into another app just
+            // as this window takes focus mustn't skip the permissions.
+            .keyboardShortcut(isLastPage ? nil : .defaultAction)
         }
         .padding(.horizontal, 28)
         .padding(.bottom, 24)
@@ -91,14 +95,23 @@ struct WelcomeView: View {
 // MARK: Pages
 
 private struct HelloPage: View {
+    /// Bumped when displays change (the lid opens or closes), to re-check the notch.
+    @State private var screensChanged = 0
+
     private var problem: (title: String, detail: String)? {
+        _ = screensChanged
+        if WelcomePermissions.isRunningFromDiskImage {
+            return ("Move it to Applications first",
+                    "It's running from the disk image, so it would disappear when that's ejected. Quit it, drag Yihao's Notch into Applications and open it from there.")
+        }
+        let noNotch = ("This Mac has no notch",
+                       "Yihao's Notch is made for MacBooks with a notch in the screen. On this Mac there's nowhere for it to appear.")
+        guard WelcomePermissions.isLaptop else { return noNotch }
         guard let screen = ScreenLocator.builtInScreen else {
             return ("Open your MacBook's lid",
                     "Yihao's Notch lives in the notch of the built-in display, so it stays hidden while the lid is closed.")
         }
-        guard ScreenLocator.notchSize(on: screen) == nil else { return nil }
-        return ("This display has no notch",
-                "Yihao's Notch is made for MacBooks with a notch in the screen. On this Mac there's nowhere for it to appear.")
+        return ScreenLocator.notchSize(on: screen) == nil ? noNotch : nil
     }
 
     var body: some View {
@@ -140,8 +153,12 @@ private struct HelloPage: View {
                 .padding(.top, 26)
             }
             Spacer(minLength: 0)
+            Spacer(minLength: 0)
         }
-        .padding(.top, 20)
+        .padding(.top, 40)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            screensChanged += 1
+        }
     }
 }
 
@@ -161,8 +178,8 @@ private struct HowToPage: View {
                     Tip(symbol: "hand.draw", title: "Or swipe down with two fingers",
                         detail: "With the pointer on the notch, it opens at once.",
                         isActive: activeTip == 1)
-                    Tip(symbol: "gearshape", title: "Settings live in the app",
-                        detail: "There's no Dock or menu bar icon: open Yihao's Notch again from Spotlight.",
+                    Tip(symbol: "gearshape", title: "Open it again for Settings",
+                        detail: "It has no Dock or menu bar icon. Open Yihao's Notch from Spotlight or Applications to change how it works.",
                         isActive: false)
                 }
                 .frame(width: 250, alignment: .leading)
@@ -188,7 +205,7 @@ private struct PermissionsPage: View {
             VStack(spacing: 0) {
                 PermissionRow(symbol: "calendar", title: "Calendar",
                               detail: "Today's events, and one click to join a call.") {
-                    PermissionControl(state: permissions.calendar,
+                    PermissionControl(name: "Calendar", state: permissions.calendar,
                                       allow: { permissions.requestCalendar(using: calendar) },
                                       openSettings: { WelcomePermissions.openPrivacySettings("Privacy_Calendars") })
                 }
@@ -198,7 +215,7 @@ private struct PermissionsPage: View {
                     if permissions.askingMusic {
                         ProgressView().controlSize(.small)
                     } else {
-                        PermissionControl(state: permissions.music,
+                        PermissionControl(name: musicTitle, state: permissions.music,
                                           allow: { permissions.requestMusic() },
                                           openSettings: { WelcomePermissions.openPrivacySettings("Privacy_Automation") })
                     }
@@ -206,19 +223,19 @@ private struct PermissionsPage: View {
                 Divider().overlay(Theme.hairline)
                 PermissionRow(symbol: "camera", title: "Camera mirror",
                               detail: "A quick look before a call. Only on while the mirror is open.") {
-                    PermissionControl(state: permissions.camera,
+                    PermissionControl(name: "Camera", state: permissions.camera,
                                       allow: { permissions.requestCamera() },
                                       openSettings: { WelcomePermissions.openPrivacySettings("Privacy_Camera") })
                 }
                 Divider().overlay(Theme.hairline)
                 PermissionRow(symbol: "speaker.wave.2", title: "Volume and brightness",
-                              detail: "In the notch, not the big pop-up. Needs Accessibility.") {
+                              detail: "Instead of the big pop-up. Needs Accessibility.") {
                     hudControl
                 }
                 Divider().overlay(Theme.hairline)
                 PermissionRow(symbol: "power", title: "Open at login",
                               detail: "Start Yihao's Notch whenever you log in.") {
-                    Toggle("", isOn: Binding(get: { permissions.launchAtLogin },
+                    Toggle("Open at login", isOn: Binding(get: { permissions.launchAtLogin },
                                              set: { permissions.setLaunchAtLogin($0) }))
                         .toggleStyle(.switch)
                         .controlSize(.small)
@@ -232,6 +249,10 @@ private struct PermissionsPage: View {
         }
         .padding(.horizontal, 44)
         .padding(.top, 36)
+        // Statuses are only watched while they're on screen; the window controller also
+        // stops this when the window closes.
+        .onAppear { permissions.startWatching() }
+        .onDisappear { permissions.stopWatching() }
     }
 
     private var musicTitle: String {
@@ -241,25 +262,30 @@ private struct PermissionsPage: View {
 
     private var musicDetail: String {
         permissions.music == .notRunning
-            ? "What's playing, with controls. macOS asks when the player is open."
+            ? "What's playing, with controls. Asked the first time you play music."
             : "What's playing, with controls and lyrics."
     }
 
+    /// A switch, so it can be turned off again here; while it's on but Accessibility
+    /// hasn't been allowed yet, a button leads to the setting.
     @ViewBuilder private var hudControl: some View {
-        if !settings.replaceSystemHUD {
-            Button("Turn On") {
-                settings.replaceSystemHUD = true
-                mediaKeys.enable(prompt: true)
+        HStack(spacing: 10) {
+            if settings.replaceSystemHUD, !mediaKeys.isRunning {
+                Button("Open Settings…") {
+                    mediaKeys.refreshPermission()
+                    mediaKeys.openAccessibilitySettings()
+                }
+                .buttonStyle(WelcomeSmallButtonStyle())
             }
-            .buttonStyle(WelcomeSmallButtonStyle())
-        } else if mediaKeys.isRunning {
-            AllowedLabel()
-        } else {
-            Button("Open Settings…") {
-                mediaKeys.refreshPermission()
-                mediaKeys.openAccessibilitySettings()
-            }
-            .buttonStyle(WelcomeSmallButtonStyle())
+            Toggle("Volume and brightness in the notch", isOn: Binding(
+                get: { settings.replaceSystemHUD },
+                set: { enabled in
+                    settings.replaceSystemHUD = enabled
+                    if enabled { mediaKeys.enable(prompt: true) } else { mediaKeys.disable() }
+                }))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
         }
     }
 }
@@ -342,11 +368,13 @@ private struct PermissionRow<Control: View>: View {
                 .frame(minWidth: 70, alignment: .trailing)
         }
         .padding(.vertical, 11)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }
 
 private struct PermissionControl: View {
+    /// For VoiceOver: "Allow Calendar" rather than a row of identical "Allow" buttons.
+    let name: String
     let state: PermissionState
     let allow: () -> Void
     let openSettings: () -> Void
@@ -359,13 +387,14 @@ private struct PermissionControl: View {
             case .denied:
                 Button("Open Settings…", action: openSettings)
                     .buttonStyle(WelcomeSmallButtonStyle())
+                    .accessibilityLabel("Open Settings to allow \(name)")
             case .notAsked:
                 Button("Allow", action: allow)
                     .buttonStyle(WelcomeSmallButtonStyle())
+                    .accessibilityLabel("Allow \(name)")
             case .notRunning:
-                Text("Later")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.tertiary)
+                // Nothing to press yet; the row's description says when it's asked.
+                EmptyView()
             }
         }
         .animation(.easeOut(duration: 0.2), value: state)

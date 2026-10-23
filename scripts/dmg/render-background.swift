@@ -80,7 +80,7 @@ let paragraph = NSMutableParagraphStyle()
 paragraph.alignment = .center
 let attributes: [NSAttributedString.Key: Any] = [
     .font: NSFont.systemFont(ofSize: 13, weight: .medium),
-    .foregroundColor: NSColor(white: 1, alpha: 0.92),
+    .foregroundColor: NSColor(white: 0.08, alpha: 0.85),
     .paragraphStyle: paragraph,
 ]
 (caption as NSString).draw(in: CGRect(x: 0, y: 44, width: size.width, height: 20), withAttributes: attributes)

@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import EventKit
+import IOKit.ps
 import ServiceManagement
 
 enum PermissionState: Equatable {
@@ -14,9 +15,13 @@ enum Automation {
     /// Whether this app may control the app with `bundleID` through Apple events. With
     /// `ask`, macOS shows its consent prompt if the user hasn't decided; that call waits
     /// for their answer, so this must run off the main thread.
+    ///
+    /// It names the event the app really sends (get data) rather than wildcards: with
+    /// wildcards, macOS can report "would need consent" without ever showing the prompt.
     nonisolated static func state(of bundleID: String, ask: Bool) -> PermissionState {
         let target = NSAppleEventDescriptor(bundleIdentifier: bundleID)
-        let status = AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, ask)
+        let status = AEDeterminePermissionToAutomateTarget(
+            target.aeDesc, AEEventClass(kAECoreSuite), AEEventID(kAEGetData), ask)
         switch Int(status) {
         case Int(noErr): return .allowed
         case errAEEventNotPermitted: return .denied
@@ -26,8 +31,8 @@ enum Automation {
     }
 }
 
-/// What the welcome screen shows for each permission, re-read every second while it's
-/// open so changes made in System Settings appear straight away.
+/// What the welcome screen shows for each permission, re-read every second while its
+/// permissions page is showing, so changes made in System Settings appear straight away.
 @MainActor
 @Observable
 final class WelcomePermissions {
@@ -41,13 +46,13 @@ final class WelcomePermissions {
     @ObservationIgnored private var allowedPlayers: Set<MusicSource> = []
     @ObservationIgnored private var watcher: Task<Void, Never>?
 
-    var installedPlayers: [MusicSource] { MusicSource.allCases.filter { $0.appURL != nil } }
+    let installedPlayers = MusicSource.allCases.filter { $0.appURL != nil }
 
     func startWatching() {
         watcher?.cancel()
-        watcher = Task {
+        watcher = Task { [weak self] in
             while !Task.isCancelled {
-                await refresh()
+                await self?.refresh()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
@@ -58,20 +63,25 @@ final class WelcomePermissions {
         watcher = nil
     }
 
+    /// Assigns only what changed: every assignment re-renders the page, even of an equal value.
     func refresh() async {
-        calendar = switch EKEventStore.authorizationStatus(for: .event) {
+        let calendar: PermissionState = switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess: .allowed
         case .notDetermined: .notAsked
         default: .denied
         }
-        camera = switch AVCaptureDevice.authorizationStatus(for: .video) {
+        let camera: PermissionState = switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized: .allowed
         case .notDetermined: .notAsked
         default: .denied
         }
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        let launchAtLogin = SMAppService.mainApp.status == .enabled
+        if calendar != self.calendar { self.calendar = calendar }
+        if camera != self.camera { self.camera = camera }
+        if launchAtLogin != self.launchAtLogin { self.launchAtLogin = launchAtLogin }
         guard !askingMusic else { return }
-        music = await musicState(asking: false)
+        let music = await musicState(asking: false)
+        if music != self.music, !askingMusic { self.music = music }
     }
 
     func requestCalendar(using service: CalendarService) {
@@ -101,11 +111,14 @@ final class WelcomePermissions {
         } else {
             try? SMAppService.mainApp.unregister()
         }
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        let status = SMAppService.mainApp.status
+        launchAtLogin = status == .enabled
+        // Registered, but macOS wants it approved in Login Items first.
+        if enabled, status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
     }
 
-    /// One state for both players: denied if either is, allowed if one is and neither is
-    /// denied, otherwise whether there's a running player to ask.
+    /// One state for both players: a running player still to be asked comes first (so
+    /// Allow asks it even if the other was denied), then denied, then allowed.
     private func musicState(asking: Bool) async -> PermissionState {
         var states: [PermissionState] = []
         for player in installedPlayers {
@@ -114,10 +127,28 @@ final class WelcomePermissions {
             if state == .allowed { allowedPlayers.insert(player) }
             states.append(state == .notRunning && allowedPlayers.contains(player) ? .allowed : state)
         }
-        if states.contains(.denied) { return .denied }
         if states.contains(.notAsked) { return .notAsked }
+        if states.contains(.denied) { return .denied }
         if states.contains(.allowed) { return .allowed }
         return .notRunning
+    }
+
+    /// Where the app is running from, if that's somewhere it shouldn't be: straight from
+    /// the disk image, or a quarantined copy macOS has moved aside ("translocated").
+    /// Either way it disappears later, along with "Open at login".
+    static var isRunningFromDiskImage: Bool {
+        let path = Bundle.main.bundlePath
+        return path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/")
+    }
+
+    /// Laptops have an internal battery; desktop Macs never have a notch.
+    static var isLaptop: Bool {
+        let info = IOPSCopyPowerSourcesInfo().takeRetainedValue()
+        let sources = IOPSCopyPowerSourcesList(info).takeRetainedValue() as [CFTypeRef]
+        return sources.contains { source in
+            let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any]
+            return description?[kIOPSTypeKey] as? String == kIOPSInternalBatteryType
+        }
     }
 
     static func openPrivacySettings(_ anchor: String) {
