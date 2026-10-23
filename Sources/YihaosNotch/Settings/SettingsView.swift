@@ -10,6 +10,22 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            // First, so it's found without scrolling.
+            Section("Help") {
+                LabeledContent {
+                    Button("Show Tour…") { WelcomeWindowController.shared.show(page: 1) }
+                } label: {
+                    Text("How to use Yihao's Notch")
+                    Text("What it shows by itself, how to open it, and what's in the panel.")
+                }
+                LabeledContent {
+                    Button("Review…") { WelcomeWindowController.shared.show(page: 2) }
+                } label: {
+                    Text("Permissions")
+                    Text("Calendar, Music and Spotify, Camera, and the volume keys.")
+                }
+            }
+
             Section("Opening") {
                 Picker("Open the notch by", selection: $settings.openTrigger) {
                     Text("Hovering").tag(OpenTrigger.hover)
@@ -81,21 +97,6 @@ struct SettingsView: View {
                 Text("Replaces the system's volume and brightness pop-up with a small indicator in the notch. While the panel is open, macOS shows its own. The volume-change sound isn't played.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-
-            Section("Help") {
-                LabeledContent {
-                    Button("Show Tour…") { WelcomeWindowController.shared.show(page: 1) }
-                } label: {
-                    Text("How to use Yihao's Notch")
-                    Text("What it shows by itself, how to open it, and what's in the panel.")
-                }
-                LabeledContent {
-                    Button("Review…") { WelcomeWindowController.shared.show(page: 2) }
-                } label: {
-                    Text("Permissions")
-                    Text("Calendar, Music and Spotify, Camera, and the volume keys.")
-                }
             }
 
             Section {
