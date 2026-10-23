@@ -30,25 +30,25 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 # Hardened runtime: blocks DYLD_INSERT_LIBRARIES-style injection, which would otherwise
 # let other software borrow the app's Camera, Calendar and Accessibility permissions.
 ENTITLEMENTS="$ROOT/Resources/YihaosNotch.entitlements"
-KEYCHAIN="$ROOT/.signing/signing.keychain-db"
-if [[ -f "$KEYCHAIN" ]]; then
-  # Reading the password shows a macOS dialog: click Allow (not Always Allow).
-  echo "Signing: macOS will ask to let \"security\" use \"YihaosNotchSigning\". Click Allow."
-  if ! PASSWORD="$(security find-generic-password -a "$USER" -s YihaosNotchSigning -w)"; then
+source "$ROOT/scripts/lib-signing.sh"
+if KEYCHAIN="$(signing_keychain)"; then
+  echo "Signing: macOS will ask to let \"security\" use \"$SIGNING_SERVICE\". Click Allow."
+  if ! PASSWORD="$(read_signing_password)"; then
     echo "error: couldn't read the signing password (denied, or run make-signing-identity.sh)." >&2
     exit 1
   fi
-  [[ "$KEYCHAIN" != *[[:space:]]* ]] || { echo "error: keychain path contains spaces" >&2; exit 1; }
-  # Sent through stdin: on the command line, any process could read it with `ps`.
-  printf 'unlock-keychain -p %s %s\n' "$PASSWORD" "$KEYCHAIN" | security -i >/dev/null
-  unset PASSWORD
   # Re-lock however the script ends, including when signing fails under `set -e`.
   trap 'security lock-keychain "$KEYCHAIN" 2>/dev/null' EXIT
-  IDENTITY=$(openssl x509 -in "$ROOT/.signing/cert.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
+  if ! sec "unlock-keychain -p $PASSWORD $KEYCHAIN"; then
+    unset PASSWORD
+    echo "error: the signing keychain didn't unlock. Restore the identity with" >&2
+    echo "       make-signing-identity.sh --restore <backup.p12> (see the README)." >&2
+    exit 1
+  fi
+  unset PASSWORD
+  IDENTITY=$(openssl x509 -in "$SIGNING_DIR/cert.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
   codesign --force --options runtime --entitlements "$ENTITLEMENTS" \
            --keychain "$KEYCHAIN" --sign "$IDENTITY" "$APP"
-  # Lock again straight away, so the key can't be used by anything else between builds.
-  security lock-keychain "$KEYCHAIN"
 else
   echo "warning: no local signing identity, signing ad-hoc (permissions reset on every build)."
   echo "         Run ./scripts/make-signing-identity.sh once to fix that."

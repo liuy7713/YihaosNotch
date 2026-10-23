@@ -55,7 +55,7 @@ working, the brightness keys simply fall back to macOS.
 ## Build and run
 
 ```sh
-./scripts/make-signing-identity.sh   # once: a local signing identity in .signing/
+./scripts/make-signing-identity.sh   # once: a local signing identity in .signing/ (then back it up, below)
 ./scripts/build.sh                   # builds build/Yihao's Notch.app
 ./scripts/build.sh --install         # also installs to ~/Applications and launches it
 ```
@@ -71,6 +71,22 @@ trigger it, so one that appears out of the blue should be denied.
 
 Builds use the hardened runtime with only the entitlements in
 `Resources/YihaosNotch.entitlements`.
+
+**Back up the identity** once after creating it, so a damaged keychain never costs you
+the app's permissions:
+
+```sh
+./scripts/backup-signing-identity.sh            # writes ~/Documents/YihaosNotch-signing-backup.p12
+```
+
+Keep the file and its passphrase in your password manager: together they let anyone
+sign as this app. If a build ever reports that the signing keychain didn't unlock,
+restore the same identity (every permission keeps working):
+
+```sh
+security delete-keychain .signing/*.keychain-db && rm -rf .signing
+./scripts/make-signing-identity.sh --restore ~/path/to/YihaosNotch-signing-backup.p12
+```
 
 Open the app again (from Finder or Spotlight) to show Settings; it has no Dock icon or
 menu bar item.
