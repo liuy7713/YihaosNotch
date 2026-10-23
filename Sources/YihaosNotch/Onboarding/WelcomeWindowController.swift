@@ -10,22 +10,23 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
 
     private var window: NSWindow?
     private var permissions: WelcomePermissions?
-    private var makeView: ((_ permissions: WelcomePermissions, _ finish: @escaping () -> Void) -> WelcomeView)?
-
     private var settings: AppSettings?
+    private var makeView: ((_ page: Int, _ permissions: WelcomePermissions, _ finish: @escaping () -> Void) -> WelcomeView)?
 
     func configure(settings: AppSettings, calendar: CalendarService, mediaKeys: MediaKeyController) {
         self.settings = settings
-        makeView = { permissions, finish in
+        makeView = { page, permissions, finish in
             WelcomeView(settings: settings, calendar: calendar, mediaKeys: mediaKeys,
-                        permissions: permissions, onFinish: finish)
+                        permissions: permissions, onFinish: finish, startPage: page)
         }
     }
 
-    func show() {
+    /// Opens the welcome at `page` (Settings' Help opens it at the tour, page 1). If
+    /// it's already open, it's just brought forward where it is.
+    func show(page: Int = WelcomeView.previewPage) {
         if window == nil, let makeView {
             let permissions = WelcomePermissions(firstRun: settings?.needsWelcome ?? true)
-            let hosting = NSHostingController(rootView: makeView(permissions) { [weak self] in self?.window?.close() })
+            let hosting = NSHostingController(rootView: makeView(page, permissions) { [weak self] in self?.window?.close() })
             hosting.sizingOptions = [.preferredContentSize]
             let window = NSWindow(contentViewController: hosting)
             window.title = "Welcome to Yihao's Notch"

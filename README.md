@@ -92,8 +92,9 @@ security delete-keychain ~/.yihaos-notch/signing/*.keychain-db && rm -rf ~/.yiha
 ./scripts/make-signing-identity.sh --restore ~/path/to/YihaosNotch-signing-backup.p12
 ```
 
-Open the app again (from Finder or Spotlight) to show Settings; it has no Dock icon or
-menu bar item.
+Open the app again (from Finder or Spotlight), or click the gear in the open panel, to
+show Settings; it has no Dock icon or menu bar item. Settings › Help replays the tour
+from the welcome screen.
 
 ## Releasing
 

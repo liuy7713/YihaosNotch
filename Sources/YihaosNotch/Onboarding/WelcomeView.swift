@@ -9,11 +9,21 @@ struct WelcomeView: View {
     let permissions: WelcomePermissions
     let onFinish: () -> Void
 
-    @State private var page = WelcomeView.previewPage
+    @State private var page: Int
     @State private var forward = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let pageCount = 3
+
+    init(settings: AppSettings, calendar: CalendarService, mediaKeys: MediaKeyController,
+         permissions: WelcomePermissions, onFinish: @escaping () -> Void, startPage: Int = 0) {
+        self.settings = settings
+        self.calendar = calendar
+        self.mediaKeys = mediaKeys
+        self.permissions = permissions
+        self.onFinish = onFinish
+        _page = State(initialValue: min(max(startPage, 0), 2))
+    }
 
     /// Development aid: `--preview-welcome N` opens the welcome screen at page N (0–2).
     static var previewPage: Int {

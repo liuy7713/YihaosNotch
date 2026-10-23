@@ -83,6 +83,21 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Help") {
+                LabeledContent {
+                    Button("Show Tour…") { WelcomeWindowController.shared.show(page: 1) }
+                } label: {
+                    Text("How to use Yihao's Notch")
+                    Text("What it shows by itself, how to open it, and what's in the panel.")
+                }
+                LabeledContent {
+                    Button("Review…") { WelcomeWindowController.shared.show(page: 2) }
+                } label: {
+                    Text("Permissions")
+                    Text("Calendar, Music and Spotify, Camera, and the volume keys.")
+                }
+            }
+
             Section {
                 Toggle("Launch at login", isOn: launchAtLogin)
                 // macOS can accept the registration but hold it until the user approves
@@ -97,13 +112,12 @@ struct SettingsView: View {
                     Text("Yihao's Notch \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Show Welcome…") { WelcomeWindowController.shared.show() }
                     Button("Quit") { NSApp.terminate(nil) }
                 }
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 600)
+        .frame(width: 460, height: 680)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // Picks up an approval made in System Settings while this window was open.
             loginItemStatus = SMAppService.mainApp.status
