@@ -55,15 +55,15 @@ working, the brightness keys simply fall back to macOS.
 ## Build and run
 
 ```sh
-./scripts/make-signing-identity.sh   # once: a local signing identity in .signing/ (then back it up, below)
-./scripts/build.sh                   # builds build/Yihao's Notch.app
+./scripts/make-signing-identity.sh   # once: a local signing identity (then back it up, below)
+./scripts/build.sh                   # builds ~/Library/Caches/YihaosNotch/Yihao's Notch.app
 ./scripts/build.sh --install         # also installs to /Applications and launches it
 ```
 
 Signing every build with the same identity lets macOS remember the app's permissions
 across rebuilds; without it, the build is signed ad hoc and permissions are asked
-for again after every rebuild. The identity lives in its own keychain in `.signing/`
-(git-ignored). Its password is kept in your login keychain with no trusted apps, so
+for again after every rebuild. The identity lives in its own keychain in
+`~/.yihaos-notch/signing`, outside the project so it never syncs anywhere. Its password is kept in your login keychain with no trusted apps, so
 each build shows a macOS dialog: click **Allow** (not *Always Allow*). That way no
 other software can sign as this app and inherit its permissions. Only allow that
 dialog right after you've started `./scripts/build.sh` yourself: any program can
@@ -86,7 +86,7 @@ this app. If a build ever reports that the signing keychain didn't unlock,
 restore the same identity (every permission keeps working):
 
 ```sh
-security delete-keychain .signing/*.keychain-db && rm -rf .signing
+security delete-keychain ~/.yihaos-notch/signing/*.keychain-db && rm -rf ~/.yihaos-notch/signing
 ./scripts/make-signing-identity.sh --restore ~/path/to/YihaosNotch-signing-backup.p12
 ```
 
@@ -95,7 +95,7 @@ menu bar item.
 
 ### Development flags
 
-Pass these to the built app, e.g. `open "build/Yihao's Notch.app" --args --preview-open`:
+Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ Notch.app --args --preview-open`:
 
 | Flag | Effect |
 |---|---|

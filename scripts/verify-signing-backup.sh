@@ -6,9 +6,10 @@
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
+source "$ROOT/scripts/lib-signing.sh"
 BACKUP="${1:-$HOME/Documents/YihaosNotch-signing-backup.p12}"
 [[ -f "$BACKUP" ]] || { echo "error: $BACKUP not found" >&2; exit 1; }
-[[ -f "$ROOT/.signing/cert.pem" ]] || { echo "error: no signing identity in .signing/" >&2; exit 1; }
+[[ -f "$SIGNING_DIR/cert.pem" ]] || { echo "error: no signing identity in $SIGNING_DIR" >&2; exit 1; }
 
 read -rs "PASS?Backup passphrase: "; echo
 # The passphrase goes through stdin, never the command line.
@@ -19,7 +20,7 @@ key_ok="$( { print -r -- "$PASS" | openssl pkcs12 -in "$BACKUP" -nocerts -nodes 
   || print -r -- "$PASS" | openssl pkcs12 -in "$BACKUP" -nocerts -nodes -passin stdin 2>/dev/null; } \
   | grep -c "PRIVATE KEY-----" || true)"
 unset PASS
-app_fp="$(openssl x509 -in "$ROOT/.signing/cert.pem" -noout -fingerprint -sha1)"
+app_fp="$(openssl x509 -in "$SIGNING_DIR/cert.pem" -noout -fingerprint -sha1)"
 
 if [[ -z "$backup_fp" ]]; then
   echo "Couldn't open the backup: wrong passphrase, or the file is damaged."

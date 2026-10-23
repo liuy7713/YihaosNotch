@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Creates the local code-signing identity in .signing/ (git-ignored).
+# Creates the local code-signing identity in ~/.yihaos-notch/signing (see lib-signing.sh).
 #
 #   ./scripts/make-signing-identity.sh                    new identity
 #   ./scripts/make-signing-identity.sh --restore FILE.p12 restore a backup (see
@@ -30,11 +30,12 @@ fi
 
 existing=("$SIGNING_DIR"/*.keychain-db(N))
 if (( ${#existing} )); then
-  echo "A signing keychain already exists in .signing/. To replace it, first run:"
+  echo "A signing keychain already exists in $SIGNING_DIR. To replace it, first run:"
   echo "  security delete-keychain \"${existing[1]}\" && rm -rf \"$SIGNING_DIR\""
   exit 1
 fi
 mkdir -p "$SIGNING_DIR"
+chmod 700 "$SIGNING_DIR:h" "$SIGNING_DIR"
 cd "$SIGNING_DIR"
 # A unique name per identity (see signing_keychain in lib-signing.sh).
 KC="$SIGNING_DIR/signing-$(date +%Y%m%d-%H%M%S).keychain-db"
@@ -81,7 +82,7 @@ unset P12_PASS BACKUP_PASS
 # stored, or every build would fail later with no way back to the key.
 security lock-keychain "$KC"
 if ! sec "unlock-keychain -p $PASSWORD $KC"; then
-  echo "error: the new keychain doesn't unlock with its password; delete .signing/ and try again." >&2
+  echo "error: the new keychain doesn't unlock with its password; delete $SIGNING_DIR and try again." >&2
   exit 1
 fi
 security lock-keychain "$KC"
@@ -93,7 +94,7 @@ sec "add-generic-password -a $USER -s $SIGNING_SERVICE -l $SIGNING_SERVICE -w $P
 unset PASSWORD
 chmod 600 "$SIGNING_DIR"/*
 
-echo "Signing identity ready in .signing/ ($(openssl x509 -in cert.pem -noout -fingerprint -sha1 | cut -d= -f2 | tr -d : | cut -c1-8)…)."
+echo "Signing identity ready in $SIGNING_DIR ($(openssl x509 -in cert.pem -noout -fingerprint -sha1 | cut -d= -f2 | tr -d : | cut -c1-8)…)."
 if [[ -z "$RESTORE" ]]; then
   echo "Back it up now, so a broken keychain never costs you your permissions:"
   echo "  ./scripts/backup-signing-identity.sh"

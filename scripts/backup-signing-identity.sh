@@ -13,7 +13,7 @@ umask 077
 ROOT="${0:A:h:h}"
 source "$ROOT/scripts/lib-signing.sh"
 
-KC="$(signing_keychain)" || { echo "error: no signing keychain in .signing/" >&2; exit 1; }
+KC="$(signing_keychain)" || { echo "error: no signing keychain in $SIGNING_DIR" >&2; exit 1; }
 OUT="${1:-$HOME/Documents/YihaosNotch-signing-backup.p12}"
 OUT="${OUT:A}"
 [[ ! -e "$OUT" ]] || { echo "error: $OUT already exists" >&2; exit 1; }

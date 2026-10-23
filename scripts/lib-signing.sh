@@ -1,9 +1,11 @@
 # Shared by the signing scripts (sourced, not run). Expects ROOT to be set.
 #
-# The identity lives in its own keychain in .signing/. Its random password is kept in
-# the login keychain with no trusted apps, so reading it always shows a system dialog.
+# The identity lives in its own keychain in ~/.yihaos-notch/signing. Its random password
+# is kept in the login keychain with no trusted apps, so reading it always shows a
+# system dialog. It's kept out of the project folder, which may sync to iCloud: the
+# identity must never leave this Mac.
 
-SIGNING_DIR="$ROOT/.signing"
+SIGNING_DIR="$HOME/.yihaos-notch/signing"
 SIGNING_SERVICE=YihaosNotchSigning
 
 # Runs one `security` command line through stdin, so passwords in it never appear on

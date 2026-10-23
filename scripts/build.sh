@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds "Yihao's Notch.app" into ./build.
+# Builds "Yihao's Notch.app" into ~/Library/Caches/YihaosNotch.
 #   --install   also copy it to /Applications and (re)launch it
 set -euo pipefail
 
@@ -13,13 +13,17 @@ if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app ]]; then
 fi
 
 APP_NAME="Yihao's Notch"
-APP="$ROOT/build/$APP_NAME.app"
+# Build outside the project folder, which may sync to iCloud: syncing a gigabyte of
+# build products is pointless, and the metadata iCloud attaches to files breaks signing.
+BUILD_DIR="$HOME/Library/Caches/YihaosNotch"
+APP="$BUILD_DIR/$APP_NAME.app"
 INSTALL_DIR=/Applications
 # Where earlier versions installed it; removed on install so only one copy exists.
 OLD_INSTALL_DIR="$HOME/Applications"
 
-swift build -c release --arch arm64
-BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
+SWIFT_BUILD=(swift build -c release --arch arm64 --scratch-path "$BUILD_DIR/.build")
+"${SWIFT_BUILD[@]}"
+BIN_DIR="$("${SWIFT_BUILD[@]}" --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
