@@ -44,6 +44,16 @@ final class AppSettings {
     var eventReminderMinutes: Int {
         didSet { defaults.set(eventReminderMinutes, forKey: Key.eventReminder) }
     }
+    /// The version of the welcome screen last finished. It shows at launch while this is
+    /// behind `Self.welcomeVersion`; raise that when the welcome gains something worth
+    /// seeing again.
+    private(set) var welcomeCompleted: Int {
+        didSet { defaults.set(welcomeCompleted, forKey: Key.welcome) }
+    }
+
+    static let welcomeVersion = 1
+    var needsWelcome: Bool { welcomeCompleted < Self.welcomeVersion }
+    func completeWelcome() { welcomeCompleted = Self.welcomeVersion }
 
     private init() {
         let d = UserDefaults.standard
@@ -57,6 +67,7 @@ final class AppSettings {
             Key.eventReminder: 5,
             Key.systemHUD: false,
             Key.headphones: true,
+            Key.welcome: 0,
         ])
         openTrigger = OpenTrigger(rawValue: d.string(forKey: Key.openTrigger) ?? "") ?? .hover
         hoverDelay = d.double(forKey: Key.hoverDelay)
@@ -67,6 +78,7 @@ final class AppSettings {
         eventReminderMinutes = d.integer(forKey: Key.eventReminder)
         replaceSystemHUD = d.bool(forKey: Key.systemHUD)
         showHeadphonesActivity = d.bool(forKey: Key.headphones)
+        welcomeCompleted = d.integer(forKey: Key.welcome)
     }
 
     private enum Key {
@@ -79,5 +91,6 @@ final class AppSettings {
         static let eventReminder = "eventReminderMinutes"
         static let systemHUD = "replaceSystemHUD"
         static let headphones = "showHeadphonesActivity"
+        static let welcome = "welcomeCompleted"
     }
 }

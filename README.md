@@ -29,11 +29,12 @@ of memory.
 
 - A MacBook with a notch (it does nothing on Macs without one).
 - macOS 15 or later.
-- Xcode, to build it.
+- Xcode, to build it (not to use it: see [Releasing](#releasing)).
 
 ## Permissions
 
-Each is asked for only when the feature that needs it is first used.
+The welcome screen on first launch asks for each one in turn, with a reason, and any
+can be skipped; a skipped one is asked for when its feature is first used.
 
 | Permission | Used for |
 |---|---|
@@ -93,6 +94,37 @@ security delete-keychain ~/.yihaos-notch/signing/*.keychain-db && rm -rf ~/.yiha
 Open the app again (from Finder or Spotlight) to show Settings; it has no Dock icon or
 menu bar item.
 
+## Releasing
+
+To give the app to someone, build a disk image:
+
+```sh
+./scripts/release.sh                 # writes dist/YihaosNotch-<version>.dmg
+```
+
+They open it, drag the app into Applications, and the welcome screen takes it from
+there: no Terminal, no Xcode. Raise `CFBundleShortVersionString` and `CFBundleVersion`
+in `Resources/Info.plist` before each release. The first run asks whether the script
+may control Finder, which it uses to lay out the disk image window.
+
+**Without a Developer ID** (today), the image is signed with the local identity. It
+works, but macOS can't verify who made it, so each person allows it once in System
+Settings › Privacy & Security › Open Anyway; the script writes `dist/HOW-TO-OPEN.txt`
+with those steps to send along.
+
+**With a Developer ID** (Apple Developer Program, $99 a year), the same command signs
+the app and image with it and has Apple notarize both, so they open anywhere without a
+warning. Once, after installing the "Developer ID Application" certificate from your
+developer account, store the notarization credentials (it asks for an app-specific
+password, created at account.apple.com):
+
+```sh
+xcrun notarytool store-credentials YihaosNotch --apple-id YOU@EXAMPLE.COM --team-id TEAMID
+```
+
+Releases signed with a Developer ID are a different identity from your local builds,
+so installing one over a local build asks for the permissions again (and vice versa).
+
 ### Development flags
 
 Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ Notch.app --args --preview-open`:
@@ -103,6 +135,7 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--preview-cycle` | Opens and closes the panel every 1.5 s (for tuning animations). |
 | `--preview-timer` | Starts a 25-minute timer and shows the timer view. |
 | `--preview-swap` | Flips the right column between calendar and timer every 2 s. |
+| `--preview-welcome N` | Shows the welcome screen at page N (0–2), even if it has been finished. |
 | `--preview-hud` | Cycles the volume, brightness and headphone indicators with sample values. The real volume and brightness are untouched. |
 
 The media-key handling logs to the unified log:
@@ -125,3 +158,4 @@ The app icon is drawn in code (`scripts/icon/render-icon.swift`); run
 | `Features/System` | Volume/brightness keys (event tap, opt-in), headphone connection |
 | `Features/Timer` | Countdown timer, opened from the header clock |
 | `Settings/` | Settings window |
+| `Onboarding/` | First-launch welcome: what it is, how to open it, permissions one at a time |

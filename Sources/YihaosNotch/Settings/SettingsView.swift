@@ -97,6 +97,7 @@ struct SettingsView: View {
                     Text("Yihao's Notch \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
                         .foregroundStyle(.secondary)
                     Spacer()
+                    Button("Show Welcome…") { WelcomeWindowController.shared.show() }
                     Button("Quit") { NSApp.terminate(nil) }
                 }
             }

@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         viewModel = NotchViewModel(settings: settings, nowPlaying: nowPlaying, calendar: calendar, timer: timer)
         SettingsWindowController.shared.configure(settings: settings, calendar: calendar, mediaKeys: mediaKeys)
+        WelcomeWindowController.shared.configure(settings: settings, calendar: calendar, mediaKeys: mediaKeys)
+        WelcomeWindowController.shared.onFinish = { [weak self] in self?.welcomeFinished() }
 
         battery.onPowerEvent = { [viewModel, settings] event in
             guard settings.showBatteryActivity else { return }
@@ -54,13 +56,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.controller = controller
         mediaKeys.canShowHUD = { [weak controller] in controller?.canShowLiveActivity ?? false }
 
-        nowPlaying.start()
+        // Until the welcome screen is done, nothing that would raise a permission prompt
+        // runs: it asks for each one itself, with a reason. (Reading the players sends
+        // them Apple events, which prompts.)
+        let welcoming = settings.needsWelcome
+        if !welcoming { nowPlaying.start() }
         battery.start()
-        if settings.calendarEnabled { calendar.start() }
+        if settings.calendarEnabled { calendar.start(requestingAccess: !welcoming) }
         headphones.start()
-        // Silent at launch: the permission prompt only ever comes from the Settings toggle.
+        // Silent at launch: the permission prompt only ever comes from a toggle.
         if settings.replaceSystemHUD { mediaKeys.enable(prompt: false) }
+        if welcoming || CommandLine.arguments.contains("--preview-welcome") {
+            WelcomeWindowController.shared.show()
+        }
         runPreviewFlags()
+    }
+
+    private func welcomeFinished() {
+        guard settings.needsWelcome else { return }
+        settings.completeWelcome()
+        nowPlaying.start()
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.6))
+            self?.controller?.greet()
+        }
     }
 
     /// Development aids for checking visuals without pressing keys or clicking:

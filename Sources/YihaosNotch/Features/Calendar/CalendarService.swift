@@ -65,7 +65,9 @@ final class CalendarService {
         eventsByDay[day] ?? []
     }
 
-    func start() {
+    /// `requestingAccess: false` leaves the permission prompt to the welcome screen, so
+    /// a new user isn't asked before they know what the app is.
+    func start(requestingAccess: Bool = true) {
         guard !started else { return }
         started = true
         updateAccess()
@@ -88,7 +90,7 @@ final class CalendarService {
         }))
         scheduleMinuteTick()
 
-        if access == .notDetermined { requestAccess() } else { refresh() }
+        if access == .notDetermined, requestingAccess { requestAccess() } else { refresh() }
     }
 
     /// Called when the calendar is turned off in Settings.

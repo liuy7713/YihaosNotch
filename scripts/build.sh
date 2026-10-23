@@ -37,7 +37,12 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 # let other software borrow the app's Camera, Calendar and Accessibility permissions.
 ENTITLEMENTS="$ROOT/Resources/YihaosNotch.entitlements"
 source "$ROOT/scripts/lib-signing.sh"
-if KEYCHAIN="$(signing_keychain)"; then
+if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
+  # A release identity such as "Developer ID Application: …" from the login keychain
+  # (release.sh sets this). Notarization needs the secure timestamp.
+  codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
+           --sign "$CODESIGN_IDENTITY" "$APP"
+elif KEYCHAIN="$(signing_keychain)"; then
   echo "Signing: macOS will ask to let \"security\" use \"$SIGNING_SERVICE\". Click Allow."
   if ! PASSWORD="$(read_signing_password)"; then
     echo "error: couldn't read the signing password (denied, or run make-signing-identity.sh)." >&2

@@ -31,6 +31,8 @@ final class NotchController {
     /// After waking from sleep, a pointer that was left resting on the notch shouldn't
     /// open it by itself.
     private var armSuppressedUntil = Date.distantPast
+    /// While set, the panel stays open wherever the pointer is (see `greet`).
+    private var greetingUntil = Date.distantPast
 
     /// Development aid: `--preview-open` opens the panel at launch and keeps it open,
     /// so it can be screenshotted without hovering.
@@ -235,7 +237,7 @@ final class NotchController {
             if openHitRect.contains(p) {
                 closeTask?.cancel()
                 closeTask = nil
-            } else if closeTask == nil, !previewCycle {
+            } else if closeTask == nil, !previewCycle, Date.now >= greetingUntil {
                 scheduleClose()
             }
         }
@@ -265,6 +267,17 @@ final class NotchController {
             open()
         }
         if event.phase == .ended || event.phase == .cancelled { swipeDistance = 0 }
+    }
+
+    /// Opens the panel for a few seconds wherever the pointer is, so someone who has
+    /// just finished the welcome screen sees where the app lives.
+    func greet() {
+        greetingUntil = .now + 2.5
+        open()
+        Task {
+            try? await Task.sleep(for: .seconds(2.6))
+            pointerMoved()
+        }
     }
 
     private func arm() {
