@@ -41,6 +41,16 @@ final class NotchController {
     /// animations can be recorded and tuned. Pointer-driven closing is off in this mode,
     /// so the panel really stays open for the full interval.
     private let previewCycle = CommandLine.arguments.contains("--preview-cycle")
+    /// Development aid: `--simulate-notch 140x24` lays everything out as if the notch
+    /// were that size in points, to check other MacBooks and display scalings (a 14"
+    /// ranges from about 140×24 at "Larger Text" to 225×38 at "More Space").
+    private let simulatedNotch: CGSize? = {
+        let arguments = CommandLine.arguments
+        guard let index = arguments.firstIndex(of: "--simulate-notch"), index + 1 < arguments.count
+        else { return nil }
+        let parts = arguments[index + 1].split(separator: "x").compactMap { Double($0) }
+        return parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
+    }()
 
     /// Room around the open shape for its shadow. The panel window is exactly the open
     /// hit area, so clicks just outside the visible panel are never swallowed by a
@@ -108,7 +118,7 @@ final class NotchController {
     /// resolution without a notch).
     private func layout() {
         guard let screen = ScreenLocator.builtInScreen,
-              let notch = ScreenLocator.notchSize(on: screen)
+              let notch = simulatedNotch ?? ScreenLocator.notchSize(on: screen)
         else {
             hideAndReset()
             return

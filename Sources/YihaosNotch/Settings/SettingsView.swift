@@ -118,11 +118,19 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 680)
+        .frame(width: 460, height: Self.height)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // Picks up an approval made in System Settings while this window was open.
             loginItemStatus = SMAppService.mainApp.status
         }
+    }
+
+    /// Tall enough to show most sections, but never taller than the screen: at the
+    /// largest text sizes a 13" MacBook Air has only about 640 points to spare. The
+    /// form scrolls for the rest.
+    private static var height: CGFloat {
+        let available = NSScreen.main?.visibleFrame.height ?? 800
+        return max(360, min(680, available - 60))
     }
 
     private var launchAtLogin: Binding<Bool> {

@@ -117,11 +117,15 @@ private struct HelloPage: View {
         let noNotch = ("This Mac has no notch",
                        "Yihao's Notch is made for MacBooks with a notch in the screen. On this Mac there's nowhere for it to appear.")
         guard WelcomePermissions.isLaptop else { return noNotch }
+        // A MacBook without a notch, or one set to a resolution that keeps the menu bar
+        // below it: macOS reports the two the same way.
+        let notchHidden = ("No notch on this display",
+                           "Yihao's Notch needs a MacBook with a notch in the screen. If yours has one, choose a resolution in System Settings › Displays that includes it.")
         guard let screen = ScreenLocator.builtInScreen else {
             return ("Open your MacBook's lid",
                     "Yihao's Notch lives in the notch of the built-in display, so it stays hidden while the lid is closed.")
         }
-        return ScreenLocator.notchSize(on: screen) == nil ? noNotch : nil
+        return ScreenLocator.notchSize(on: screen) == nil ? notchHidden : nil
     }
 
     var body: some View {
