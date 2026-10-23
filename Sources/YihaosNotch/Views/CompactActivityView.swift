@@ -137,6 +137,6 @@ private struct LevelBar: View {
         .frame(width: 26, height: 4)
         .animation(.spring(response: 0.25, dampingFraction: 0.85), value: level)
         .accessibilityElement()
-        .accessibilityValue("\(Int((level * 100).rounded())) percent")
+        .accessibilityValue(level.isFinite ? "\(Int((min(max(level, 0), 1) * 100).rounded())) percent" : "")
     }
 }

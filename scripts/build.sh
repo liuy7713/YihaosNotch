@@ -38,8 +38,12 @@ if [[ -f "$KEYCHAIN" ]]; then
     echo "error: couldn't read the signing password (denied, or run make-signing-identity.sh)." >&2
     exit 1
   fi
-  security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
+  [[ "$KEYCHAIN" != *[[:space:]]* ]] || { echo "error: keychain path contains spaces" >&2; exit 1; }
+  # Sent through stdin: on the command line, any process could read it with `ps`.
+  printf 'unlock-keychain -p %s %s\n' "$PASSWORD" "$KEYCHAIN" | security -i >/dev/null
   unset PASSWORD
+  # Re-lock however the script ends, including when signing fails under `set -e`.
+  trap 'security lock-keychain "$KEYCHAIN" 2>/dev/null' EXIT
   IDENTITY=$(openssl x509 -in "$ROOT/.signing/cert.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
   codesign --force --options runtime --entitlements "$ENTITLEMENTS" \
            --keychain "$KEYCHAIN" --sign "$IDENTITY" "$APP"

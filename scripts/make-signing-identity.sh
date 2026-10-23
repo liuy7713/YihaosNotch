@@ -26,9 +26,23 @@ cd "$DIR"
 # Absolute path: given a bare name, `security` would put the keychain in ~/Library/Keychains.
 KC="$DIR/signing.keychain-db"
 PASSWORD="$(openssl rand -hex 24)"
+[[ "$KC" != *[[:space:]]* ]] || { echo "error: the project path must not contain spaces" >&2; exit 1; }
+
+# Every command that takes the password goes through `security -i` on stdin, so the
+# password never appears on a command line, where `ps` would show it to any process.
+# `security -i` exits 0 even when a command fails, so look at what it printed instead.
+# Only the command's name is reported, never the line itself (it holds the password).
+sec() {
+  local out
+  out="$(print -r -- "$1" | security -i 2>&1)"
+  if [[ "$out" == *"returned -"* || "$out" == *"security: "* ]]; then
+    print -r -- "error: security ${1%% *} failed" >&2
+    return 1
+  fi
+}
+
 # -T "" trusts no application, so every read prompts (click Allow, not Always Allow).
-security add-generic-password -a "$USER" -s "$SERVICE" -l "Yihao's Notch signing keychain" \
-  -w "$PASSWORD" -T "" "$HOME/Library/Keychains/login.keychain-db"
+sec "add-generic-password -a $USER -s $SERVICE -l YihaosNotchSigning -w $PASSWORD -T \"\" $HOME/Library/Keychains/login.keychain-db"
 
 cat > cert.cnf <<'CNF'
 [req]
@@ -44,16 +58,25 @@ extendedKeyUsage=critical,codeSigning
 CNF
 
 openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 -nodes -config cert.cnf 2>/dev/null
-openssl pkcs12 -export -out id.p12 -inkey key.pem -in cert.pem -passout "pass:$PASSWORD" -legacy 2>/dev/null \
-  || openssl pkcs12 -export -out id.p12 -inkey key.pem -in cert.pem -passout "pass:$PASSWORD"
+print -r -- "$PASSWORD" | openssl pkcs12 -export -out id.p12 -inkey key.pem -in cert.pem -passout stdin -legacy 2>/dev/null \
+  || print -r -- "$PASSWORD" | openssl pkcs12 -export -out id.p12 -inkey key.pem -in cert.pem -passout stdin
 
-security create-keychain -p "$PASSWORD" "$KC"
+sec "create-keychain -p $PASSWORD $KC"
 # Lock on sleep and after 5 minutes, in case a build is interrupted before it locks.
 security set-keychain-settings -l -u -t 300 "$KC"
-security unlock-keychain -p "$PASSWORD" "$KC"
-security import id.p12 -k "$KC" -P "$PASSWORD" -T /usr/bin/codesign >/dev/null
-security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PASSWORD" "$KC" >/dev/null
+sec "unlock-keychain -p $PASSWORD $KC"
+sec "import id.p12 -k $KC -P $PASSWORD -T /usr/bin/codesign"
+sec "set-key-partition-list -S apple-tool:,apple:,codesign: -s -k $PASSWORD $KC"
 rm -f key.pem id.p12
+
+# Self-check: the keychain must unlock with the password just stored in the login
+# keychain, or every build would fail later with no way to recover the key.
+security lock-keychain "$KC"
+if ! sec "unlock-keychain -p $PASSWORD $KC"; then
+  echo "error: the new keychain doesn't unlock with its password; delete .signing/ and try again." >&2
+  exit 1
+fi
+unset PASSWORD
 security lock-keychain "$KC"
 chmod 600 "$DIR"/*
 

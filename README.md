@@ -65,7 +65,9 @@ across rebuilds; without it, the build is signed ad hoc and permissions are aske
 for again after every rebuild. The identity lives in its own keychain in `.signing/`
 (git-ignored). Its password is kept in your login keychain with no trusted apps, so
 each build shows a macOS dialog: click **Allow** (not *Always Allow*). That way no
-other software can sign as this app and inherit its permissions.
+other software can sign as this app and inherit its permissions. Only allow that
+dialog right after you've started `./scripts/build.sh` yourself: any program can
+trigger it, so one that appears out of the blue should be denied.
 
 Builds use the hardened runtime with only the entitlements in
 `Resources/YihaosNotch.entitlements`.

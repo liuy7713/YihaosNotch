@@ -133,7 +133,7 @@ struct PlayerUpdate: Sendable {
         case let number as NSNumber:
             String(format: "%016llX", UInt64(bitPattern: number.int64Value))
         case let string as String:
-            string.uppercased()
+            text(string)?.uppercased()
         default:
             nil
         }
@@ -224,9 +224,13 @@ final class NowPlayingService {
         // flood of osascript processes.
         guard positionRefresh == nil, let source, let trackID = track?.id, source.isRunning else { return }
         positionRefresh = Task {
-            defer { positionRefresh = nil }
+            defer {
+                positionRefresh = nil
+                // A refresh asked for while this one ran (a new track) was dropped; do it now.
+                if track?.id != trackID { refreshPosition() }
+            }
             guard let text = await Osascript.run(source.script("return player position")),
-                  let value = Osascript.number(text),
+                  let value = PlayerUpdate.seconds(text, scale: 1),
                   // Ignore the answer if the track changed while the script ran.
                   source == self.source, trackID == track?.id
             else { return }
@@ -376,7 +380,7 @@ final class NowPlayingService {
             urlString = await Osascript.run(MusicSource.spotify.script("return artwork url of current track"))
         }
         guard let urlString, let url = URL(string: urlString), isSpotifyArtwork(url),
-              let (data, _) = try? await Network.session.data(from: url)
+              let (data, _) = try? await Network.data(for: URLRequest(url: url), limit: 8_000_000)
         else { return nil }
         return downsampled(data)
     }
