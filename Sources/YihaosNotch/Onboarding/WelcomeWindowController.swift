@@ -12,7 +12,10 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
     private var permissions: WelcomePermissions?
     private var makeView: ((_ permissions: WelcomePermissions, _ finish: @escaping () -> Void) -> WelcomeView)?
 
+    private var settings: AppSettings?
+
     func configure(settings: AppSettings, calendar: CalendarService, mediaKeys: MediaKeyController) {
+        self.settings = settings
         makeView = { permissions, finish in
             WelcomeView(settings: settings, calendar: calendar, mediaKeys: mediaKeys,
                         permissions: permissions, onFinish: finish)
@@ -21,7 +24,7 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
 
     func show() {
         if window == nil, let makeView {
-            let permissions = WelcomePermissions()
+            let permissions = WelcomePermissions(firstRun: settings?.needsWelcome ?? true)
             let hosting = NSHostingController(rootView: makeView(permissions) { [weak self] in self?.window?.close() })
             hosting.sizingOptions = [.preferredContentSize]
             let window = NSWindow(contentViewController: hosting)
@@ -50,6 +53,7 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         permissions?.stopWatching()
+        permissions?.applyLaunchAtLogin()
         permissions = nil
         window = nil
         NSApp.setActivationPolicy(.accessory)

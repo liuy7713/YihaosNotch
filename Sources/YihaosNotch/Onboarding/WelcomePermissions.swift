@@ -39,7 +39,11 @@ final class WelcomePermissions {
     private(set) var calendar: PermissionState = .notAsked
     private(set) var camera: PermissionState = .notAsked
     private(set) var music: PermissionState = .notRunning
-    private(set) var launchAtLogin = false
+    /// The "Open at login" switch. On by default for a first welcome (without it the
+    /// app is simply gone after a restart), otherwise whatever is set now. Applied by
+    /// `applyLaunchAtLogin` when the welcome closes, so it's never registered from a
+    /// copy that's about to be dragged elsewhere.
+    var wantsLaunchAtLogin: Bool
     private(set) var askingMusic = false
 
     /// Players last seen allowed, kept so quitting one doesn't hide that it's allowed.
@@ -47,6 +51,10 @@ final class WelcomePermissions {
     @ObservationIgnored private var watcher: Task<Void, Never>?
 
     let installedPlayers = MusicSource.allCases.filter { $0.appURL != nil }
+
+    init(firstRun: Bool) {
+        wantsLaunchAtLogin = firstRun || SMAppService.mainApp.status == .enabled
+    }
 
     func startWatching() {
         watcher?.cancel()
@@ -75,10 +83,8 @@ final class WelcomePermissions {
         case .notDetermined: .notAsked
         default: .denied
         }
-        let launchAtLogin = SMAppService.mainApp.status == .enabled
         if calendar != self.calendar { self.calendar = calendar }
         if camera != self.camera { self.camera = camera }
-        if launchAtLogin != self.launchAtLogin { self.launchAtLogin = launchAtLogin }
         guard !askingMusic else { return }
         let music = await musicState(asking: false)
         if music != self.music, !askingMusic { self.music = music }
@@ -105,16 +111,19 @@ final class WelcomePermissions {
         }
     }
 
-    func setLaunchAtLogin(_ enabled: Bool) {
-        if enabled {
-            try? SMAppService.mainApp.register()
-        } else {
-            try? SMAppService.mainApp.unregister()
+    /// Registers or unregisters the login item to match the switch, if that changes
+    /// anything. A copy running from the disk image is never registered: that path
+    /// disappears when the image is ejected.
+    func applyLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        let isOn = service.status == .enabled || service.status == .requiresApproval
+        if wantsLaunchAtLogin, !isOn, !Self.isRunningFromDiskImage {
+            try? service.register()
+            // Registered, but macOS wants it approved in Login Items first.
+            if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+        } else if !wantsLaunchAtLogin, isOn {
+            try? service.unregister()
         }
-        let status = SMAppService.mainApp.status
-        launchAtLogin = status == .enabled
-        // Registered, but macOS wants it approved in Login Items first.
-        if enabled, status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
     }
 
     /// One state for both players: a running player still to be asked comes first (so

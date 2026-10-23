@@ -126,7 +126,7 @@ private struct HelloPage: View {
                 .font(.system(size: 30, weight: .semibold))
                 .foregroundStyle(Theme.primary)
                 .padding(.top, 18)
-            Text("Your music, your day and a few handy extras,\ntucked into the notch.")
+            Text("What's playing in Music or Spotify, your next meeting\nand a timer, right in the notch.")
                 .font(.system(size: 15))
                 .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
@@ -167,20 +167,20 @@ private struct HowToPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageTitle("Hiding in plain sight",
-                      subtitle: "The notch looks the same until you need it.")
+            PageTitle("It lives in the notch",
+                      subtitle: "Quiet until something's happening. Open it whenever you like.")
             HStack(alignment: .center, spacing: 30) {
                 NotchDemo(activeTip: $activeTip)
                 VStack(alignment: .leading, spacing: 18) {
-                    Tip(symbol: "cursorarrow", title: "Rest the pointer on the notch",
-                        detail: "It opens after a moment. Move away to close it.",
+                    Tip(symbol: "bell", title: "It speaks up on its own",
+                        detail: "What's playing, your next meeting, a running timer or your charger. Turn any of them off in Settings.",
                         isActive: activeTip == 0)
-                    Tip(symbol: "hand.draw", title: "Or swipe down with two fingers",
-                        detail: "With the pointer on the notch, it opens at once.",
+                    Tip(symbol: "cursorarrow", title: "Rest the pointer on it to open",
+                        detail: "Or swipe down on it with two fingers. Move away to close.",
                         isActive: activeTip == 1)
-                    Tip(symbol: "gearshape", title: "Open it again for Settings",
-                        detail: "It has no Dock or menu bar icon. Open Yihao's Notch from Spotlight or Applications to change how it works.",
-                        isActive: false)
+                    Tip(symbol: "cursorarrow.rays", title: "Click around the panel",
+                        detail: "The clock starts a timer, the camera shows a mirror, and the gear opens Settings and Quit.",
+                        isActive: activeTip == 2)
                 }
                 .frame(width: 250, alignment: .leading)
             }
@@ -204,7 +204,7 @@ private struct PermissionsPage: View {
                       subtitle: "Your calendar and camera never leave this Mac. You can change any of this later in Settings.")
             VStack(spacing: 0) {
                 PermissionRow(symbol: "calendar", title: "Calendar",
-                              detail: "Today's events, and one click to join a call.") {
+                              detail: "Your events, with one click to join Zoom, Teams, Meet or Webex.") {
                     PermissionControl(name: "Calendar", state: permissions.calendar,
                                       allow: { permissions.requestCalendar(using: calendar) },
                                       openSettings: { WelcomePermissions.openPrivacySettings("Privacy_Calendars") })
@@ -234,9 +234,10 @@ private struct PermissionsPage: View {
                 }
                 Divider().overlay(Theme.hairline)
                 PermissionRow(symbol: "power", title: "Open at login",
-                              detail: "Start Yihao's Notch whenever you log in.") {
-                    Toggle("Open at login", isOn: Binding(get: { permissions.launchAtLogin },
-                                             set: { permissions.setLaunchAtLogin($0) }))
+                              detail: "Keeps it in your notch after a restart.") {
+                    // Applied when the welcome closes (see WelcomePermissions).
+                    Toggle("Open at login", isOn: Binding(get: { permissions.wantsLaunchAtLogin },
+                                             set: { permissions.wantsLaunchAtLogin = $0 }))
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .labelsHidden()
