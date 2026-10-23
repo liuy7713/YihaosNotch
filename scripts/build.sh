@@ -31,8 +31,15 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 # let other software borrow the app's Camera, Calendar and Accessibility permissions.
 ENTITLEMENTS="$ROOT/Resources/YihaosNotch.entitlements"
 KEYCHAIN="$ROOT/.signing/signing.keychain-db"
-if [[ -f "$KEYCHAIN" && -f "$ROOT/.signing/password" ]]; then
-  security unlock-keychain -p "$(<"$ROOT/.signing/password")" "$KEYCHAIN"
+if [[ -f "$KEYCHAIN" ]]; then
+  # Reading the password shows a macOS dialog: click Allow (not Always Allow).
+  echo "Signing: macOS will ask to let \"security\" use \"YihaosNotchSigning\". Click Allow."
+  if ! PASSWORD="$(security find-generic-password -a "$USER" -s YihaosNotchSigning -w)"; then
+    echo "error: couldn't read the signing password (denied, or run make-signing-identity.sh)." >&2
+    exit 1
+  fi
+  security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
+  unset PASSWORD
   IDENTITY=$(openssl x509 -in "$ROOT/.signing/cert.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
   codesign --force --options runtime --entitlements "$ENTITLEMENTS" \
            --keychain "$KEYCHAIN" --sign "$IDENTITY" "$APP"

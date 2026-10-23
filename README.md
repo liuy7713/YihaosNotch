@@ -63,7 +63,12 @@ working, the brightness keys simply fall back to macOS.
 Signing every build with the same identity lets macOS remember the app's permissions
 across rebuilds; without it, the build is signed ad hoc and permissions are asked
 for again after every rebuild. The identity lives in its own keychain in `.signing/`
-(git-ignored), so your login keychain is never touched.
+(git-ignored). Its password is kept in your login keychain with no trusted apps, so
+each build shows a macOS dialog: click **Allow** (not *Always Allow*). That way no
+other software can sign as this app and inherit its permissions.
+
+Builds use the hardened runtime with only the entitlements in
+`Resources/YihaosNotch.entitlements`.
 
 Open the app again (from Finder or Spotlight) to show Settings; it has no Dock icon or
 menu bar item.
