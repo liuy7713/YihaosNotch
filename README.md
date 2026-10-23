@@ -79,8 +79,10 @@ the app's permissions:
 ./scripts/backup-signing-identity.sh            # writes ~/Documents/YihaosNotch-signing-backup.p12
 ```
 
-Keep the file and its passphrase in your password manager: together they let anyone
-sign as this app. If a build ever reports that the signing keychain didn't unlock,
+Check it once with `./scripts/verify-signing-backup.sh`, which confirms the backup
+opens with your passphrase and holds the identity the app is signed with. Keep the
+file and its passphrase in your password manager: together they let anyone sign as
+this app. If a build ever reports that the signing keychain didn't unlock,
 restore the same identity (every permission keeps working):
 
 ```sh
