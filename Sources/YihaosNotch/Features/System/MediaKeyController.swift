@@ -57,13 +57,20 @@ final class MediaKeyController {
     func enable(prompt: Bool) {
         wanted = true
         refreshPermission()
-        guard !hasPermission, prompt else { return }
-        // The value of kAXTrustedCheckOptionPrompt, which Swift 6 won't read as a global.
-        AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        guard !hasPermission else { return }
+        if prompt {
+            // The value of kAXTrustedCheckOptionPrompt, which Swift 6 won't read as a global.
+            AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        }
+        // This app is rarely active, so the activation check alone can miss a grant made
+        // in System Settings (or one lost to a new signing identity and given back).
+        // Watch for it until it arrives: every second at first, then every five.
         permissionPoll?.cancel()
         permissionPoll = Task {
-            for _ in 0..<120 {
-                try? await Task.sleep(for: .seconds(1))
+            var checks = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(checks < 120 ? 1 : 5))
+                checks += 1
                 guard !Task.isCancelled else { return }
                 if AXIsProcessTrusted() {
                     refreshPermission()
