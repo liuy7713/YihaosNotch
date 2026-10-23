@@ -31,8 +31,7 @@ struct MeetingLink: Equatable, Sendable {
     static func find(in text: String) -> MeetingLink? {
         let range = NSRange(text.startIndex..., in: text)
         for match in detector.matches(in: text, range: range) {
-            guard let raw = match.url else { continue }
-            let url = unwrapRedirect(raw)
+            guard let raw = match.url, let url = webURL(unwrapRedirect(raw)) else { continue }
             if let provider = provider(for: url) {
                 return MeetingLink(provider: provider, url: url)
             }
@@ -66,6 +65,22 @@ struct MeetingLink: Equatable, Sendable {
     /// anyone, so a trusted-looking Join button must only appear for real domains.
     private static func isHost(_ host: String, in domain: String) -> Bool {
         host == domain || host.hasSuffix("." + domain)
+    }
+
+    /// Invites come from anyone, so Join must only ever open a web link: http(s) only,
+    /// rebuilt from its parts as https (dropping any user:password@), never file://,
+    /// smb:// or an app scheme.
+    private static func webURL(_ url: URL) -> URL? {
+        guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              let original = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let host = original.host, !host.isEmpty
+        else { return nil }
+        var rebuilt = URLComponents()
+        rebuilt.scheme = "https"
+        rebuilt.host = host
+        rebuilt.percentEncodedPath = original.percentEncodedPath
+        rebuilt.percentEncodedQuery = original.percentEncodedQuery
+        return rebuilt.url
     }
 
     private static func provider(for url: URL) -> Provider? {
@@ -116,7 +131,7 @@ struct MeetingLink: Equatable, Sendable {
 
     /// https://company.zoom.us/j/123?pwd=abc&tk=x → zoommtg://company.zoom.us/join?action=join&confno=123&pwd=abc&tk=x
     ///
-    /// Every original query item is carried over (webinar registrations need `tk`).
+    /// Only `pwd`, `tk` (webinar registration) and `uname` are carried over.
     /// Vanity `/my/` and web-client `/wc/` links deliberately stay in the browser,
     /// since the app scheme has no reliable equivalent for them.
     private var zoomAppURL: URL? {
@@ -129,9 +144,10 @@ struct MeetingLink: Equatable, Sendable {
         native.scheme = "zoommtg"
         native.host = host
         native.path = "/join"
-        let ours: Set<String> = ["action", "confno"]
+        // Only the parameters a join needs; Zoom's URL handler has had bugs in others.
+        let forwarded: Set<String> = ["pwd", "tk", "uname"]
         native.queryItems = [URLQueryItem(name: "action", value: "join"), URLQueryItem(name: "confno", value: parts[2])]
-            + (components.queryItems ?? []).filter { !ours.contains($0.name) }
+            + (components.queryItems ?? []).filter { forwarded.contains($0.name) }
         return native.url
     }
 

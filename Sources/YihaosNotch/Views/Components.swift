@@ -215,7 +215,8 @@ extension Date {
 extension Double {
     /// 75 → "1:15"
     var playbackTime: String {
-        guard isFinite, self >= 0 else { return "0:00" }
+        // Bounded before converting: Int(_:) traps on huge values.
+        guard isFinite, self >= 0, self < 1e7 else { return "0:00" }
         let total = Int(self)
         let hours = total / 3600, minutes = (total % 3600) / 60, seconds = total % 60
         return hours > 0

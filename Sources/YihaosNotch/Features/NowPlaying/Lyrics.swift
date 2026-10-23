@@ -127,7 +127,7 @@ enum LyricsFetcher {
             URLQueryItem(name: "artist_name", value: track.artist),
             URLQueryItem(name: "album_name", value: track.album),
         ]
-        if track.duration > 0 {
+        if track.duration > 0, track.duration <= PlayerUpdate.maxSeconds {
             items.append(URLQueryItem(name: "duration", value: String(Int(track.duration.rounded()))))
         }
         return await request(path: "/api/get", query: items)
@@ -156,10 +156,12 @@ enum LyricsFetcher {
         guard let url = components.url else { return .failed }
         var request = URLRequest(url: url, timeoutInterval: 8)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
+        guard let (data, response) = try? await Network.session.data(for: request),
               let status = (response as? HTTPURLResponse)?.statusCode
         else { return .failed }
         if status == 404 { return .notFound }
+        // Real responses are a few KB; refuse anything absurd before decoding it.
+        guard data.count <= 1_000_000 else { return .failed }
         guard status == 200, let decoded = try? JSONDecoder().decode(T.self, from: data) else { return .failed }
         return .ok(decoded)
     }

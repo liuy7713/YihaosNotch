@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum MusicSource: String, CaseIterable, Sendable {
     case music, spotify
@@ -79,27 +80,49 @@ struct PlayerUpdate: Sendable {
     var isPlaying: Bool { state.lowercased() == "playing" }
     var isStopped: Bool { state.lowercased() == "stopped" }
 
+    /// Any process on the Mac can post these notifications, so every field is treated
+    /// as untrusted: numbers must be finite and in range, strings are length-capped.
     static func fromNotification(_ info: [AnyHashable: Any], source: MusicSource) -> PlayerUpdate {
-        let state = info["Player State"] as? String ?? "Stopped"
-        guard let name = info["Name"] as? String else {
+        let state = text(info["Player State"]) ?? "Stopped"
+        guard let name = text(info["Name"]) else {
             return PlayerUpdate(state: state)
         }
-        let durationMs: Double
+        let duration: Double
         let id: String
         switch source {
         case .music:
-            durationMs = (info["Total Time"] as? NSNumber)?.doubleValue ?? 0
+            duration = seconds(info["Total Time"], scale: 1000) ?? 0
             id = musicTrackID(info["PersistentID"] ?? info["Persistent ID"]) ?? name
         case .spotify:
-            durationMs = (info["Duration"] as? NSNumber)?.doubleValue ?? 0
-            id = info["Track ID"] as? String ?? name
+            duration = seconds(info["Duration"], scale: 1000) ?? 0
+            id = text(info["Track ID"]) ?? name
         }
         let track = Track(id: id, title: name,
-                          artist: info["Artist"] as? String ?? "",
-                          album: info["Album"] as? String ?? "",
-                          duration: durationMs / 1000)
-        let position = (info["Playback Position"] as? NSNumber)?.doubleValue
-        return PlayerUpdate(state: state, track: track, position: position)
+                          artist: text(info["Artist"]) ?? "",
+                          album: text(info["Album"]) ?? "",
+                          duration: duration)
+        return PlayerUpdate(state: state, track: track, position: seconds(info["Playback Position"], scale: 1))
+    }
+
+    /// The longest track or position accepted: a day. Anything outside is dropped.
+    static let maxSeconds: Double = 86_400
+
+    /// A finite, in-range number of seconds, or nil.
+    static func seconds(_ value: Any?, scale: Double) -> Double? {
+        let raw: Double? = switch value {
+        case let number as NSNumber: number.doubleValue
+        case let string as String: Osascript.number(string)
+        default: nil
+        }
+        guard let raw, raw.isFinite else { return nil }
+        let result = raw / scale
+        return (0...maxSeconds).contains(result) ? result : nil
+    }
+
+    /// A string, capped so a hostile value can't bloat the UI or lyrics requests.
+    static func text(_ value: Any?, limit: Int = 500) -> String? {
+        guard let string = value as? String else { return nil }
+        return String(string.prefix(limit))
     }
 
     /// Music's notifications carry the persistent ID as a signed 64-bit number, while
@@ -136,6 +159,7 @@ final class NowPlayingService {
     @ObservationIgnored private var players: [MusicSource: (update: PlayerUpdate, at: Date)] = [:]
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var lyricsTask: Task<Void, Never>?
+    @ObservationIgnored private var positionRefresh: Task<Void, Never>?
     /// Keyed by track ID; nil entries remember tracks LRCLIB has no synced lyrics for.
     /// Failed lookups (offline, timeouts) are not cached, so they're retried next time.
     @ObservationIgnored private var lyricsCache: [String: Lyrics?] = [:]
@@ -196,8 +220,11 @@ final class NowPlayingService {
 
     /// Re-reads the exact position from the player (notifications from Music don't include it).
     func refreshPosition() {
-        guard let source, let trackID = track?.id, source.isRunning else { return }
-        Task {
+        // One at a time: a flood of (possibly spoofed) notifications mustn't spawn a
+        // flood of osascript processes.
+        guard positionRefresh == nil, let source, let trackID = track?.id, source.isRunning else { return }
+        positionRefresh = Task {
+            defer { positionRefresh = nil }
             guard let text = await Osascript.run(source.script("return player position")),
                   let value = Osascript.number(text),
                   // Ignore the answer if the track changed while the script ran.
@@ -275,11 +302,11 @@ final class NowPlayingService {
                 apply(PlayerUpdate(state: fields.first ?? "stopped"), from: source)
                 continue
             }
-            let rawDuration = Osascript.number(fields[4]) ?? 0
+            let rawDuration = PlayerUpdate.seconds(fields[4], scale: source == .spotify ? 1000 : 1) ?? 0
             let id = source == .music ? (PlayerUpdate.musicTrackID(fields[6]) ?? fields[6]) : fields[6]
             let track = Track(id: id, title: fields[1], artist: fields[2], album: fields[3],
-                              duration: source == .spotify ? rawDuration / 1000 : rawDuration)
-            apply(PlayerUpdate(state: fields[0], track: track, position: Osascript.number(fields[5]),
+                              duration: rawDuration)
+            apply(PlayerUpdate(state: fields[0], track: track, position: PlayerUpdate.seconds(fields[5], scale: 1),
                                artworkURL: fields.count > 7 ? fields[7] : nil),
                   from: source)
         }
@@ -348,16 +375,31 @@ final class NowPlayingService {
         if urlString == nil || urlString?.isEmpty == true {
             urlString = await Osascript.run(MusicSource.spotify.script("return artwork url of current track"))
         }
-        guard let urlString, let url = URL(string: urlString),
-              let (data, _) = try? await URLSession.shared.data(from: url)
+        guard let urlString, let url = URL(string: urlString), isSpotifyArtwork(url),
+              let (data, _) = try? await Network.session.data(from: url)
         else { return nil }
         return downsampled(data)
     }
 
+    /// Only https URLs on Spotify's image CDNs are fetched; anything else the player
+    /// reports (file://, other hosts) is ignored.
+    private static func isSpotifyArtwork(_ url: URL) -> Bool {
+        guard url.scheme == "https", let host = url.host?.lowercased() else { return false }
+        return ["scdn.co", "spotifycdn.com"].contains { host == $0 || host.hasSuffix("." + $0) }
+    }
+
     /// Artwork is shown at 112 pt at most, but Music's originals can be 3000 px
     /// (tens of MB once decoded). Decode straight to a small thumbnail instead.
+    ///
+    /// Image decoders are a classic attack surface, and this process holds Camera and
+    /// Accessibility, so only the formats album art actually uses are decoded, and only
+    /// up to a sane size.
     private static func downsampled(_ data: Data, maxPixels: Int = 320) -> NSImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let allowedTypes = [UTType.jpeg.identifier, UTType.png.identifier]
+        guard data.count <= 8_000_000,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let type = CGImageSourceGetType(source) as String?, allowedTypes.contains(type)
+        else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,

@@ -27,15 +27,21 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 # Sign with the local self-signed identity (see scripts/make-signing-identity.sh) so
 # macOS keeps permissions across rebuilds. Falls back to ad-hoc signing.
+# Hardened runtime: blocks DYLD_INSERT_LIBRARIES-style injection, which would otherwise
+# let other software borrow the app's Camera, Calendar and Accessibility permissions.
+ENTITLEMENTS="$ROOT/Resources/YihaosNotch.entitlements"
 KEYCHAIN="$ROOT/.signing/signing.keychain-db"
 if [[ -f "$KEYCHAIN" && -f "$ROOT/.signing/password" ]]; then
   security unlock-keychain -p "$(<"$ROOT/.signing/password")" "$KEYCHAIN"
   IDENTITY=$(openssl x509 -in "$ROOT/.signing/cert.pem" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
-  codesign --force --keychain "$KEYCHAIN" --sign "$IDENTITY" "$APP"
+  codesign --force --options runtime --entitlements "$ENTITLEMENTS" \
+           --keychain "$KEYCHAIN" --sign "$IDENTITY" "$APP"
+  # Lock again straight away, so the key can't be used by anything else between builds.
+  security lock-keychain "$KEYCHAIN"
 else
   echo "warning: no local signing identity, signing ad-hoc (permissions reset on every build)."
   echo "         Run ./scripts/make-signing-identity.sh once to fix that."
-  codesign --force --sign - "$APP"
+  codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign - "$APP"
 fi
 
 echo "Built $APP"

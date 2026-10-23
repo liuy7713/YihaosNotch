@@ -38,10 +38,13 @@ openssl pkcs12 -export -out id.p12 -inkey key.pem -in cert.pem -passout "pass:$P
   || openssl pkcs12 -export -out id.p12 -inkey key.pem -in cert.pem -passout "pass:$PASSWORD"
 
 security create-keychain -p "$PASSWORD" signing.keychain-db
-security set-keychain-settings signing.keychain-db
+# Lock on sleep and after 5 minutes, in case a build is interrupted before it locks.
+security set-keychain-settings -l -u -t 300 signing.keychain-db
 security unlock-keychain -p "$PASSWORD" signing.keychain-db
 security import id.p12 -k signing.keychain-db -P "$PASSWORD" -T /usr/bin/codesign >/dev/null
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PASSWORD" signing.keychain-db >/dev/null
 rm -f key.pem id.p12
+security lock-keychain signing.keychain-db
+chmod 600 "$DIR"/*
 
 echo "Created a signing identity in .signing/. Build with ./scripts/build.sh"
