@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Builds "Yihao's Notch.app" into ./build.
-#   --install   also copy it to ~/Applications and (re)launch it
+#   --install   also copy it to /Applications and (re)launch it
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
@@ -14,7 +14,9 @@ fi
 
 APP_NAME="Yihao's Notch"
 APP="$ROOT/build/$APP_NAME.app"
-INSTALL_DIR="$HOME/Applications"
+INSTALL_DIR=/Applications
+# Where earlier versions installed it; removed on install so only one copy exists.
+OLD_INSTALL_DIR="$HOME/Applications"
 
 swift build -c release --arch arm64
 BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
@@ -59,8 +61,7 @@ echo "Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
   pkill -x YihaosNotch 2>/dev/null && sleep 0.5 || true
-  mkdir -p "$INSTALL_DIR"
-  rm -rf "$INSTALL_DIR/$APP_NAME.app"
+  rm -rf "$INSTALL_DIR/$APP_NAME.app" "$OLD_INSTALL_DIR/$APP_NAME.app"
   ditto "$APP" "$INSTALL_DIR/$APP_NAME.app"
   open "$INSTALL_DIR/$APP_NAME.app"
   echo "Installed and launched $INSTALL_DIR/$APP_NAME.app"

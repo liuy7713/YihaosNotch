@@ -57,7 +57,7 @@ working, the brightness keys simply fall back to macOS.
 ```sh
 ./scripts/make-signing-identity.sh   # once: a local signing identity in .signing/ (then back it up, below)
 ./scripts/build.sh                   # builds build/Yihao's Notch.app
-./scripts/build.sh --install         # also installs to ~/Applications and launches it
+./scripts/build.sh --install         # also installs to /Applications and launches it
 ```
 
 Signing every build with the same identity lets macOS remember the app's permissions
