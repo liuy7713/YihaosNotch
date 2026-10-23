@@ -34,23 +34,33 @@ trap 'security lock-keychain "$KC" 2>/dev/null; pbcopy </dev/null' EXIT
 sec "unlock-keychain -p $PASSWORD $KC"
 
 # macOS always asks for the signing keychain's own password before a private key can
-# be exported. That password is random and never shown, so put it on the clipboard
-# (marked concealed, so clipboard-history apps skip it) for the dialog, and wipe the
-# clipboard as soon as the export is done.
-print -rn -- "$PASSWORD" | osascript -l JavaScript -e '
-  ObjC.import("AppKit");
-  var data = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
-  var pb = $.NSPasteboard.generalPasteboard;
-  pb.clearContents;
-  pb.setStringForType($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding), $.NSPasteboardTypeString);
-  pb.setStringForType($(""), $("org.nspasteboard.ConcealedType"));' >/dev/null
-unset PASSWORD
+# be exported. That password is random and never shown, so while the export dialog is
+# open the script keeps it on the clipboard (marked concealed, so clipboard-history
+# apps skip it; refreshed every second in case something else gets copied), and wipes
+# the clipboard as soon as the export ends.
+copy_concealed() {
+  print -rn -- "$1" | osascript -l JavaScript -e '
+    ObjC.import("AppKit");
+    var data = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
+    var pb = $.NSPasteboard.generalPasteboard;
+    pb.clearContents;
+    pb.setStringForType($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding), $.NSPasteboardTypeString);
+    pb.setStringForType($(""), $("org.nspasteboard.ConcealedType"));' >/dev/null
+}
 echo
-echo "A second dialog will ask for the password of the \"signing\" keychain."
-echo "It's on your clipboard: click into the password field, press Cmd-V, then click Allow."
+echo "Next, a dialog asks for the password of the \"signing\" keychain. It's on your"
+echo "clipboard: click into the password field, press Cmd-V, then click Allow."
 echo
-sec "export -k $KC -t identities -f pkcs12 -P $PASS1 -o $OUT"
+sec "export -k $KC -t identities -f pkcs12 -P $PASS1 -o $OUT" &
+export_pid=$!
+while kill -0 $export_pid 2>/dev/null; do
+  copy_concealed "$PASSWORD"
+  sleep 1
+done
 pbcopy </dev/null
+unset PASSWORD
+wait $export_pid || { echo "error: the export didn't complete (was the dialog denied?)" >&2; exit 1; }
 unset PASS1 PASS2
+[[ -s "$OUT" ]] || { echo "error: no backup was written" >&2; exit 1; }
 
 echo "Saved $OUT. Move it somewhere safe (a password manager can store it as an attachment)."
