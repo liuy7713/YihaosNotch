@@ -103,14 +103,10 @@ swift "$ROOT/scripts/dmg/render-background.swift" "$WORK/bg.png" 1
 swift "$ROOT/scripts/dmg/render-background.swift" "$WORK/bg@2x.png" 2
 tiffutil -cathidpicheck "$WORK/bg.png" "$WORK/bg@2x.png" -out "$STAGE/.background/background.tiff" >/dev/null 2>&1 \
   || { echo "error: couldn't combine the background images." >&2; exit 1; }
-# The disk's own icon (in Finder's sidebar and on the desktop) is the app icon.
-cp "$ROOT/Resources/AppIcon.icns" "$STAGE/.VolumeIcon.icns"
 
 hdiutil create -quiet -volname "$VOLUME_NAME" -srcfolder "$STAGE" -fs HFS+ -format UDRW -ov "$WORK/rw.dmg"
 DEVICE="$(hdiutil attach "$WORK/rw.dmg" -readwrite -noverify -noautoopen 2>/dev/null | awk '/Apple_HFS/ {print $1}')"
 [[ -n "$DEVICE" ]] || { echo "error: couldn't mount the disk image to lay it out." >&2; exit 1; }
-# Finder's "has custom icon" flag on the volume, so it uses .VolumeIcon.icns.
-xattr -wx com.apple.FinderInfo 0000000000000000040000000000000000000000000000000000000000000000 "/Volumes/$VOLUME_NAME"
 
 # Finder records the window's look in the image's .DS_Store. macOS asks once whether
 # this script may control Finder; without that the image works, just unstyled.
@@ -145,6 +141,11 @@ for _ in {1..20}; do
 done
 [[ -f "/Volumes/$VOLUME_NAME/.DS_Store" ]] || echo "warning: Finder didn't save the window layout; the image will be unstyled."
 chflags hidden "/Volumes/$VOLUME_NAME/.background" 2>/dev/null || true
+# The disk's own icon (in Finder's sidebar and on the desktop) is the app icon: the
+# icon file plus Finder's "has custom icon" flag on the volume. Added after Finder's
+# turn, because Finder deletes both while it lays out the window.
+cp "$ROOT/Resources/AppIcon.icns" "/Volumes/$VOLUME_NAME/.VolumeIcon.icns"
+xattr -wx com.apple.FinderInfo 0000000000000000040000000000000000000000000000000000000000000000 "/Volumes/$VOLUME_NAME"
 rm -rf "/Volumes/$VOLUME_NAME/.fseventsd"
 sync
 # Spotlight or Finder can hold the new volume for a moment.
