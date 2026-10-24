@@ -128,6 +128,9 @@ final class AudioBarsNSView: NSView {
             animation.duration = Self.durations[i]
             animation.calculationMode = .cubic
             animation.repeatCount = .infinity
+            // Slow, soft movement doesn't need ProMotion's 120 Hz: 30 frames a second
+            // looks the same and lets the compositor redraw this corner a quarter as often.
+            animation.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 30, preferred: 30)
             bar.add(animation, forKey: Self.animationKey)
         }
     }

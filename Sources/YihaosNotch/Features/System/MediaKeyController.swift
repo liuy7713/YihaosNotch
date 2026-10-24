@@ -64,12 +64,13 @@ final class MediaKeyController {
         }
         // This app is rarely active, so the activation check alone can miss a grant made
         // in System Settings (or one lost to a new signing identity and given back).
-        // Watch for it until it arrives: every second at first, then every five.
+        // Watch for it until it arrives: every second at first, then every 5 s, and
+        // after 10 minutes every 30 s.
         permissionPoll?.cancel()
         permissionPoll = Task {
             var checks = 0
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(checks < 120 ? 1 : 5))
+                try? await Task.sleep(for: .seconds(checks < 120 ? 1 : checks < 216 ? 5 : 30))
                 checks += 1
                 guard !Task.isCancelled else { return }
                 if AXIsProcessTrusted() {

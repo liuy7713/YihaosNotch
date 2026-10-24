@@ -19,7 +19,6 @@ final class NotchController {
     /// Downward finger travel accumulated during the current scroll gesture.
     private var swipeDistance: CGFloat = 0
     private var screenFrame: CGRect = .zero
-    private var monitors: [Any] = []
     private var observers: [NSObjectProtocol] = []
     private var armTask: Task<Void, Never>?
     private var closeTask: Task<Void, Never>?
@@ -28,6 +27,10 @@ final class NotchController {
     /// the gesture window's tracking area reports the pointer reaching the notch, so
     /// mouse movement elsewhere on the system costs the app nothing.
     private var moveMonitor: Any?
+    /// Global click monitor, for closing the panel on a click elsewhere. Like the move
+    /// monitor it exists only while armed or open, so clicks elsewhere don't wake the
+    /// app the rest of the time.
+    private var clickMonitor: Any?
     /// After waking from sleep, a pointer that was left resting on the notch shouldn't
     /// open it by itself.
     private var armSuppressedUntil = Date.distantPast
@@ -85,10 +88,6 @@ final class NotchController {
         })
         observers.append(workspace.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: relayout))
-
-        if let m = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown, handler: { _ in
-            MainActor.assumeIsolated { self.clickedElsewhere() }
-        }) { monitors.append(m) }
 
         if pinnedOpen { open() }
         if previewCycle { runPreviewCycle() }
@@ -351,6 +350,11 @@ final class NotchController {
                 MainActor.assumeIsolated { self.pointerMoved() }
             }
         }
+        if clickMonitor == nil {
+            clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { _ in
+                MainActor.assumeIsolated { self.clickedElsewhere() }
+            }
+        }
         guard safetyTimer == nil else { return }
         let timer = Timer(timeInterval: 0.25, repeats: true) { _ in
             MainActor.assumeIsolated { self.pointerMoved() }
@@ -363,6 +367,8 @@ final class NotchController {
     private func stopPointerTracking() {
         if let moveMonitor { NSEvent.removeMonitor(moveMonitor) }
         moveMonitor = nil
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+        clickMonitor = nil
         safetyTimer?.invalidate()
         safetyTimer = nil
     }
