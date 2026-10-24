@@ -180,7 +180,9 @@ Installing Yihao's Notch
 It isn't from the App Store or a registered Apple developer, so macOS can't check who
 made it and asks you to confirm once that you trust it. That's expected, not a fault.
 
-1. Open the .dmg file and drag Yihao's Notch into the Applications folder.
+1. Open the .dmg file and drag Yihao's Notch into the Applications folder. (Without
+   an administrator account, drag it into the Applications folder inside your home
+   folder instead, or ask an administrator.)
 
 2. Open Yihao's Notch from Applications. macOS says:
      "Yihao's Notch" Not Opened. Apple could not verify "Yihao's Notch" is free of

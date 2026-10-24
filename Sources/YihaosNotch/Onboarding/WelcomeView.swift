@@ -243,7 +243,7 @@ private struct PermissionsPage: View {
                 }
                 Divider().overlay(Theme.hairline)
                 PermissionRow(symbol: "speaker.wave.2", title: "Volume and brightness",
-                              detail: "Instead of the big pop-up. Needs Accessibility.") {
+                              detail: "Instead of the big pop-up. Needs Accessibility (an admin).") {
                     hudControl
                 }
                 Divider().overlay(Theme.hairline)

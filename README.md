@@ -31,7 +31,8 @@ of memory.
 - A MacBook with a notch, so Apple silicon (it does nothing on Macs without one, or at
   a display resolution that puts the menu bar below the notch). Any notched model and
   display scaling works: sizes are read from the screen.
-- macOS 15 or later.
+- macOS 15 or later. (On an Intel Mac, which never has a notch, macOS says the app
+  isn't supported.)
 - Xcode, to build it (not to use it: see [Releasing](#releasing)).
 
 ## Permissions

@@ -168,10 +168,19 @@ final class MediaKeyController {
 
         let handled = switch key.code {
         case .soundUp, .soundDown, .mute: adjustVolume(key.code, step: step)
-        case .brightnessUp, .brightnessDown: adjustBrightness(up: key.code == .brightnessUp, step: step)
+        case .brightnessUp, .brightnessDown:
+            // On an external display, macOS knows how to dim that one (an Apple
+            // display, say); this app only ever sets the built-in screen.
+            pointerIsOnBuiltInScreen && adjustBrightness(up: key.code == .brightnessUp, step: step)
         }
         if handled { swallowedDowns.insert(key.code) }
         return handled
+    }
+
+    private var pointerIsOnBuiltInScreen: Bool {
+        let pointer = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(pointer, $0.frame, false) }) else { return true }
+        return screen == ScreenLocator.builtInScreen
     }
 
     private func adjustVolume(_ code: MediaKey.Code, step: Float) -> Bool {

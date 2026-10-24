@@ -73,7 +73,7 @@ struct TimerPanel: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Timer, \(remaining.countdownText) left")
             }
-            Text(isPaused ? "Paused" : "Ends at \((Date.now + timer.remaining()).time24)")
+            Text(isPaused ? "Paused" : "Ends at \((Date.now + timer.remaining()).shortTime)")
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                 .foregroundStyle(Theme.tertiary)
             HStack(spacing: 6) {

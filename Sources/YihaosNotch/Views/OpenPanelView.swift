@@ -48,11 +48,20 @@ struct OpenPanelView: View {
         HStack(spacing: 0) {
             TimelineView(.everyMinute) { context in
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    // Shortened while a timer shares the space.
-                    Text(context.date.formatted(.dateTime
-                        .weekday(timer.isActive ? .abbreviated : .wide).day().month(.abbreviated)))
-                        .foregroundStyle(Theme.secondary)
+                    // The date gives way to the clock (and a running timer): longest
+                    // form that fits, down to nothing. Room varies with the language
+                    // and with the notch's width on this Mac and display setting.
+                    ViewThatFits(in: .horizontal) {
+                        ForEach(Self.dateStyles.indices, id: \.self) { index in
+                            Text(context.date.formatted(Self.dateStyles[index]))
+                        }
+                        Color.clear.frame(width: 0, height: 0)
+                    }
+                    .lineLimit(1)
+                    .foregroundStyle(Theme.secondary)
                     ClockButton(now: context.date)
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
                 .font(.system(size: 12, weight: .semibold))
             }
@@ -76,6 +85,12 @@ struct OpenPanelView: View {
         .padding(.horizontal, 22)
         .frame(height: model.notchSize.height)
     }
+
+    private static let dateStyles: [Date.FormatStyle] = [
+        .dateTime.weekday(.wide).day().month(.abbreviated),
+        .dateTime.weekday(.abbreviated).day().month(.abbreviated),
+        .dateTime.day().month(.abbreviated),
+    ]
 
     private var batteryIndicator: some View {
         HStack(spacing: 5) {
@@ -140,7 +155,7 @@ private struct ClockView: View {
     var body: some View {
         TimelineView(.everyMinute) { context in
             VStack(alignment: .leading, spacing: 2) {
-                Text(context.date.time24)
+                Text(context.date.shortTime)
                     .font(.system(size: 40, weight: .semibold, design: .rounded).monospacedDigit())
                     .foregroundStyle(Theme.primary)
                 Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
@@ -168,7 +183,7 @@ private struct ClockButton: View {
             model.showingCamera = false
         } label: {
             HStack(spacing: 6) {
-                Text(now.time24)
+                Text(now.shortTime)
                     .foregroundStyle(Theme.primary)
                 if timer.isActive {
                     let isPaused = timer.isPaused

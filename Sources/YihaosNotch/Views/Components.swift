@@ -208,10 +208,14 @@ struct HeaderIconButton: View {
 }
 
 extension Date {
-    /// Always 24-hour ("13:50"), whatever the system's 12/24-hour setting.
-    var time24: String {
-        let parts = Calendar.current.dateComponents([.hour, .minute], from: self)
-        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+    /// Hours and minutes in the system's 12- or 24-hour style, without AM/PM: "09:05"
+    /// on a 24-hour Mac, "9:05" on a 12-hour one. Checked each time, so changing the
+    /// setting in System Settings shows at the next minute.
+    var shortTime: String {
+        let pattern = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current) ?? "HH"
+        let hour: Date.FormatStyle.Symbol.Hour = pattern.contains("H")
+            ? .twoDigits(amPM: .omitted) : .defaultDigits(amPM: .omitted)
+        return formatted(.dateTime.hour(hour).minute(.twoDigits))
     }
 }
 
