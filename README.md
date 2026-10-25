@@ -45,7 +45,7 @@ can be skipped; a skipped one is asked for when its feature is first used.
 | Calendars | Showing your events and meeting links. Read-only. |
 | Camera | The mirror. The camera runs only while the mirror is on screen. |
 | Automation (Music, Spotify) | Reading what's playing and controlling playback. |
-| Accessibility | Only for the optional volume/brightness indicator, which needs to catch those keys before macOS does. Off by default. |
+| Accessibility | Only for the optional volume/brightness indicator, which needs to catch those keys before macOS does. Off by default. A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. |
 
 ## Privacy
 

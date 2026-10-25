@@ -27,6 +27,7 @@ final class MediaKeyController {
     @ObservationIgnored private var wanted = false
     @ObservationIgnored private var tap: CFMachPort?
     @ObservationIgnored private var source: CFRunLoopSource?
+    @ObservationIgnored private var brightnessTap: BrightnessKeyTap?
     @ObservationIgnored private var permissionPoll: Task<Void, Never>?
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
     /// Keys whose key-down was swallowed; only their key-ups are swallowed, so macOS
@@ -102,7 +103,8 @@ final class MediaKeyController {
 
     private func startTap() {
         guard tap == nil else { return }
-        // NX_SYSDEFINED (14) carries the media and brightness keys.
+        // NX_SYSDEFINED (14) carries the media keys, and the built-in keyboard's
+        // brightness keys.
         let mask = CGEventMask(1) << 14
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
                                           options: .defaultTap, eventsOfInterest: mask,
@@ -119,6 +121,21 @@ final class MediaKeyController {
         self.tap = tap
         self.source = source
         isRunning = true
+
+        // A Magic Keyboard's brightness keys arrive as key presses instead.
+        let brightnessKeys = BrightnessKeyTap { [weak self] up, isDown, isRepeat, modifiers in
+            DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                    self?.handle(MediaKey(code: up ? .brightnessUp : .brightnessDown,
+                                          isDown: isDown, isRepeat: isRepeat, modifiers: modifiers)) ?? false
+                }
+            }
+        }
+        if brightnessKeys.start() {
+            brightnessTap = brightnessKeys
+        } else {
+            log.error("brightness key tap could not be created")
+        }
     }
 
     private func stopTap() {
@@ -127,6 +144,8 @@ final class MediaKeyController {
         if let tap { CFMachPortInvalidate(tap) }
         tap = nil
         source = nil
+        brightnessTap?.stop()
+        brightnessTap = nil
         swallowedDowns.removeAll()
         isRunning = false
     }
@@ -231,6 +250,13 @@ fileprivate struct MediaKey: Sendable {
     let isRepeat: Bool
     let modifiers: UInt
 
+    init(code: Code, isDown: Bool, isRepeat: Bool, modifiers: UInt) {
+        self.code = code
+        self.isDown = isDown
+        self.isRepeat = isRepeat
+        self.modifiers = modifiers
+    }
+
     init?(_ event: CGEvent) {
         guard let nsEvent = NSEvent(cgEvent: event), nsEvent.type == .systemDefined, nsEvent.subtype.rawValue == 8,
               let code = Code(rawValue: (nsEvent.data1 & 0xFFFF0000) >> 16)
@@ -250,7 +276,13 @@ private func mediaKeyTapCallback(proxy: CGEventTapProxy, type: CGEventType, even
         MainActor.assumeIsolated { controller.tapWasDisabled() }
         return Unmanaged.passUnretained(event)
     }
-    guard let key = MediaKey(event) else { return Unmanaged.passUnretained(event) }
+    guard let key = MediaKey(event) else {
+        // Shows what arrives if a key this app expects ever comes in another form.
+        if type.rawValue == 14, let nsEvent = NSEvent(cgEvent: event) {
+            log.debug("unhandled system event subtype=\(nsEvent.subtype.rawValue) data1=\(String(nsEvent.data1, radix: 16))")
+        }
+        return Unmanaged.passUnretained(event)
+    }
     // The tap's run-loop source is on the main run loop, so this is the main thread.
     let swallow = MainActor.assumeIsolated { controller.handle(key) }
     return swallow ? nil : Unmanaged.passUnretained(event)
@@ -261,4 +293,90 @@ private extension Float {
     func quantized(to step: Float) -> Float {
         (self / step).rounded() * step
     }
+}
+
+// MARK: Magic Keyboard brightness keys
+
+/// Apple's external keyboards (Magic Keyboard) send their brightness keys as ordinary
+/// key presses with key codes 144 (up) and 145 (down), not as media-key events.
+///
+/// Catching them takes a tap that sees every key press, so it runs on its own thread:
+/// typing never waits on the main thread, and every other key is passed straight back
+/// with nothing read but its key code. Only 144 and 145 hop to the main thread, where
+/// `handler` decides (as for any media key) whether the notch shows the change.
+final class BrightnessKeyTap: @unchecked Sendable {
+    typealias Handler = @Sendable (_ up: Bool, _ isDown: Bool, _ isRepeat: Bool, _ modifiers: UInt) -> Bool
+
+    static let brightnessUp: Int64 = 144
+    static let brightnessDown: Int64 = 145
+
+    fileprivate let handler: Handler
+    private var tap: CFMachPort?
+    private var runLoop: CFRunLoop?
+
+    init(handler: @escaping Handler) {
+        self.handler = handler
+    }
+
+    /// Creates the tap and its thread; false if macOS refused the tap.
+    func start() -> Bool {
+        let mask = (CGEventMask(1) << CGEventType.keyDown.rawValue) | (CGEventMask(1) << CGEventType.keyUp.rawValue)
+        // At the HID level, where these key presses are seen before macOS acts on them.
+        guard let tap = CGEvent.tapCreate(tap: .cghidEventTap, place: .headInsertEventTap,
+                                          options: .defaultTap, eventsOfInterest: mask,
+                                          callback: brightnessKeyTapCallback,
+                                          userInfo: Unmanaged.passUnretained(self).toOpaque())
+        else { return false }
+        self.tap = tap
+        nonisolated(unsafe) let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
+        let ready = DispatchSemaphore(value: 0)
+        let thread = Thread { [self] in
+            let loop = CFRunLoopGetCurrent()
+            runLoop = loop
+            CFRunLoopAddSource(loop, source, .commonModes)
+            ready.signal()
+            CFRunLoopRun()
+        }
+        thread.name = "Brightness keys"
+        thread.qualityOfService = .userInteractive
+        thread.start()
+        ready.wait()
+        CGEvent.tapEnable(tap: tap, enable: true)
+        return true
+    }
+
+    func stop() {
+        if let tap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+        }
+        if let runLoop { CFRunLoopStop(runLoop) }
+        tap = nil
+        runLoop = nil
+    }
+
+    /// macOS turns a tap off if a callback is slow or on some user input; turn it back
+    /// on unless permission is gone (the main tap notices that and stops everything).
+    fileprivate func reenable() {
+        guard let tap, AXIsProcessTrusted() else { return }
+        CGEvent.tapEnable(tap: tap, enable: true)
+    }
+}
+
+private func brightnessKeyTapCallback(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent,
+                                      refcon: UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>? {
+    guard let refcon else { return Unmanaged.passUnretained(event) }
+    let owner = Unmanaged<BrightnessKeyTap>.fromOpaque(refcon).takeUnretainedValue()
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        owner.reenable()
+        return Unmanaged.passUnretained(event)
+    }
+    let code = event.getIntegerValueField(.keyboardEventKeycode)
+    guard code == BrightnessKeyTap.brightnessUp || code == BrightnessKeyTap.brightnessDown else {
+        return Unmanaged.passUnretained(event)
+    }
+    let swallow = owner.handler(code == BrightnessKeyTap.brightnessUp, type == .keyDown,
+                                event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+                                UInt(event.flags.rawValue))
+    return swallow ? nil : Unmanaged.passUnretained(event)
 }
