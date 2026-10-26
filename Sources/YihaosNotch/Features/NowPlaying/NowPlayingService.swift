@@ -1,6 +1,10 @@
 import AppKit
+import os
 import SwiftUI
 import UniformTypeIdentifiers
+
+/// Play/pause transitions and the music wings retiring; states only, never track names.
+private let log = Logger(subsystem: "com.yihao.YihaosNotch", category: "NowPlaying")
 
 enum MusicSource: String, CaseIterable, Sendable {
     case music, spotify
@@ -77,7 +81,8 @@ struct PlayerUpdate: Sendable {
     var position: Double?
     var artworkURL: String?
 
-    var isPlaying: Bool { state.lowercased() == "playing" }
+    /// Music reports "fast forwarding" and "rewinding" while scanning: still playing.
+    var isPlaying: Bool { ["playing", "fast forwarding", "rewinding"].contains(state.lowercased()) }
     var isStopped: Bool { state.lowercased() == "stopped" }
 
     /// Any process on the Mac can post these notifications, so every field is treated
@@ -163,7 +168,16 @@ final class NowPlayingService {
     @ObservationIgnored private var players: [MusicSource: (update: PlayerUpdate, at: Date)] = [:]
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var idleTask: Task<Void, Never>?
-    static let idleDelay: Duration = .seconds(120)
+    /// How long paused music stays in the closed notch. Development aid:
+    /// `--music-idle-seconds N` shortens it for testing.
+    static let idleDelay: Duration = {
+        let arguments = CommandLine.arguments
+        if let index = arguments.firstIndex(of: "--music-idle-seconds"), index + 1 < arguments.count,
+           let seconds = Int(arguments[index + 1]), seconds > 0 {
+            return .seconds(seconds)
+        }
+        return .seconds(120)
+    }()
     @ObservationIgnored private var lyricsTask: Task<Void, Never>?
     @ObservationIgnored private var positionRefresh: Task<Void, Never>?
     /// Keyed by track ID; nil entries remember tracks LRCLIB has no synced lyrics for.
@@ -274,7 +288,8 @@ final class NowPlayingService {
             return
         }
 
-        let trackChanged = newTrack.id != track?.id || activeSource != self.source
+        let sourceChanged = activeSource != self.source
+        let trackChanged = newTrack.id != track?.id || sourceChanged
         self.source = activeSource
         if newTrack != track { track = newTrack }
         if trackChanged {
@@ -283,6 +298,13 @@ final class NowPlayingService {
             loadLyrics(for: newTrack)
         }
         setPlaying(entry.update.isPlaying)
+        // Another player taking over while paused (the one playing quit, say) wasn't
+        // just paused by the user: its track has no claim on the menu bar.
+        if sourceChanged, !entry.update.isPlaying, isRecentlyActive {
+            idleTask?.cancel()
+            isRecentlyActive = false
+            log.info("paused player took over; music wings retired")
+        }
         if origin == activeSource {
             if let position = update.position { anchor(at: position) } else { refreshPosition() }
         }
@@ -293,13 +315,17 @@ final class NowPlayingService {
         anchor(at: position(at: .now))
         isPlaying = playing
         idleTask?.cancel()
+        log.info("playing=\(playing)")
         if playing {
             isRecentlyActive = true
         } else {
             idleTask = Task { [weak self] in
-                try? await Task.sleep(for: Self.idleDelay)
+                // A tight tolerance: otherwise a two-minute sleep can be stretched by
+                // ten seconds or more to save energy.
+                try? await Task.sleep(for: Self.idleDelay, tolerance: .seconds(1))
                 guard !Task.isCancelled else { return }
                 self?.isRecentlyActive = false
+                log.info("paused for \(Self.idleDelay, privacy: .public); music wings retired")
             }
         }
     }
@@ -309,29 +335,41 @@ final class NowPlayingService {
         anchorDate = .now
     }
 
+    /// Sends a command, then reads the player's real state a second later. A player
+    /// only notifies on a change, so a command that didn't take (Automation denied, a
+    /// hung player) would otherwise leave the app's guess, such as the paused state
+    /// `playPause` sets straight away, standing while music plays on.
     private func send(_ command: String) {
         guard let source, source.isRunning else { return }
-        Task { _ = await Osascript.run(source.script(command)) }
+        Task {
+            _ = await Osascript.run(source.script(command))
+            try? await Task.sleep(for: .seconds(1))
+            await sync(source)
+        }
     }
 
     /// Notifications only fire on changes, so ask running players directly at launch.
     private func syncRunningPlayers() async {
         for source in MusicSource.allCases where source.isRunning {
-            guard let output = await Osascript.run(Self.statusScript(for: source)), !output.isEmpty
-            else { continue }
-            let fields = output.components(separatedBy: Self.fieldSeparator)
-            guard fields.count >= 7 else {
-                apply(PlayerUpdate(state: fields.first ?? "stopped"), from: source)
-                continue
-            }
-            let rawDuration = PlayerUpdate.seconds(fields[4], scale: source == .spotify ? 1000 : 1) ?? 0
-            let id = source == .music ? (PlayerUpdate.musicTrackID(fields[6]) ?? fields[6]) : fields[6]
-            let track = Track(id: id, title: fields[1], artist: fields[2], album: fields[3],
-                              duration: rawDuration)
-            apply(PlayerUpdate(state: fields[0], track: track, position: PlayerUpdate.seconds(fields[5], scale: 1),
-                               artworkURL: fields.count > 7 ? fields[7] : nil),
-                  from: source)
+            await sync(source)
         }
+    }
+
+    private func sync(_ source: MusicSource) async {
+        guard source.isRunning, let output = await Osascript.run(Self.statusScript(for: source)), !output.isEmpty
+        else { return }
+        let fields = output.components(separatedBy: Self.fieldSeparator)
+        guard fields.count >= 7 else {
+            apply(PlayerUpdate(state: fields.first ?? "stopped"), from: source)
+            return
+        }
+        let rawDuration = PlayerUpdate.seconds(fields[4], scale: source == .spotify ? 1000 : 1) ?? 0
+        let id = source == .music ? (PlayerUpdate.musicTrackID(fields[6]) ?? fields[6]) : fields[6]
+        let track = Track(id: id, title: fields[1], artist: fields[2], album: fields[3],
+                          duration: rawDuration)
+        apply(PlayerUpdate(state: fields[0], track: track, position: PlayerUpdate.seconds(fields[5], scale: 1),
+                           artworkURL: fields.count > 7 ? fields[7] : nil),
+              from: source)
     }
 
     private static func statusScript(for source: MusicSource) -> String {
