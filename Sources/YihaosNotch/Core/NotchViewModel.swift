@@ -65,7 +65,8 @@ final class NotchViewModel {
 
     /// The highest-priority activity right now: brief events (power, volume,
     /// headphones, a finished timer), then a running timer, then music that's
-    /// playing, then an imminent calendar event, then paused music.
+    /// playing, then an imminent calendar event, then music paused in the last two
+    /// minutes.
     var activity: LiveActivity? {
         let event: LiveActivity? = if settings.calendarEnabled, settings.eventReminderMinutes > 0,
             let item = calendar.imminentEvent(withinMinutes: settings.eventReminderMinutes) {
@@ -77,20 +78,22 @@ final class NotchViewModel {
                                timerRunning: timer.isActive,
                                hasTrack: settings.showMusicActivity && nowPlaying.track != nil,
                                isPlaying: nowPlaying.isPlaying,
+                               recentlyPlayed: nowPlaying.isRecentlyActive,
                                event: event)
     }
 
     /// The priority rules on their own, so they can be checked without live services.
     static func prioritise(transient: LiveActivity?, timerRunning: Bool, hasTrack: Bool,
-                           isPlaying: Bool, event: LiveActivity?) -> LiveActivity? {
+                           isPlaying: Bool, recentlyPlayed: Bool, event: LiveActivity?) -> LiveActivity? {
         if let transient { return transient }
         if timerRunning { return .timer }
         // A playing track keeps the wings; the event countdown waits until it pauses or stops.
         if hasTrack, isPlaying { return .music }
         if let event { return event }
-        // Paused music stays (the player still has a track); only quitting or a full
-        // stop removes it.
-        if hasTrack { return .music }
+        // Paused music stays a while, so a quick pause doesn't make the wings flicker,
+        // then goes: a paused track would otherwise cover menu-bar items beside the
+        // notch indefinitely.
+        if hasTrack, recentlyPlayed { return .music }
         return nil
     }
 

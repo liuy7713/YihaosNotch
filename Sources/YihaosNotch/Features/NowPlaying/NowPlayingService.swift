@@ -147,6 +147,10 @@ final class NowPlayingService {
     private(set) var source: MusicSource?
     private(set) var track: Track?
     private(set) var isPlaying = false
+    /// True while playing and for `idleDelay` after it pauses; the closed notch only
+    /// shows music while this holds, so a paused track doesn't keep the wings out over
+    /// the menu bar. A quick pause doesn't make them flicker.
+    private(set) var isRecentlyActive = false
     private(set) var artwork: NSImage?
     /// A colour pulled from the artwork, used for the visualizer and lyrics.
     private(set) var accent: Color = Theme.primary
@@ -158,6 +162,8 @@ final class NowPlayingService {
 
     @ObservationIgnored private var players: [MusicSource: (update: PlayerUpdate, at: Date)] = [:]
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
+    @ObservationIgnored private var idleTask: Task<Void, Never>?
+    static let idleDelay: Duration = .seconds(120)
     @ObservationIgnored private var lyricsTask: Task<Void, Never>?
     @ObservationIgnored private var positionRefresh: Task<Void, Never>?
     /// Keyed by track ID; nil entries remember tracks LRCLIB has no synced lyrics for.
@@ -260,6 +266,8 @@ final class NowPlayingService {
             self.source = nil
             track = nil
             isPlaying = false
+            idleTask?.cancel()
+            isRecentlyActive = false
             artwork = nil
             accent = Theme.primary
             lyrics = nil
@@ -284,6 +292,16 @@ final class NowPlayingService {
         guard playing != isPlaying else { return }
         anchor(at: position(at: .now))
         isPlaying = playing
+        idleTask?.cancel()
+        if playing {
+            isRecentlyActive = true
+        } else {
+            idleTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.idleDelay)
+                guard !Task.isCancelled else { return }
+                self?.isRecentlyActive = false
+            }
+        }
     }
 
     private func anchor(at seconds: Double) {

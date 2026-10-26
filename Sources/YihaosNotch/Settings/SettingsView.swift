@@ -49,7 +49,7 @@ struct SettingsView: View {
             }
 
             Section("Live activities") {
-                Toggle("Show music while a player has a track", isOn: $settings.showMusicActivity)
+                Toggle("Show music while playing, and for 2 minutes after pausing", isOn: $settings.showMusicActivity)
                 Toggle("Show charging and low battery", isOn: $settings.showBatteryActivity)
                 Picker("Countdown before events", selection: $settings.eventReminderMinutes) {
                     Text("Off").tag(0)
