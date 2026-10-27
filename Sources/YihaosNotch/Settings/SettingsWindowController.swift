@@ -43,25 +43,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             let content = NSRect(x: 0, y: 0, width: SettingsView.width, height: SettingsView.height)
             window.setContentSize(NSWindow.frameRect(forContentRect: content, styleMask: [.titled, .closable]).size)
             // Wherever the user last left it; the first time, just under the notch.
-            if !window.setFrameUsingName(frameName) { placeUnderNotch(window) }
+            if !window.setFrameUsingName(frameName) { window.placeUnderNotch() }
             window.setFrameAutosaveName(frameName)
             self.window = window
         }
         DockPresence.shared.show(for: "settings")
         window?.makeKeyAndOrderFront(nil)
-    }
-
-    /// Centred beneath the notch on the built-in display, so it reads as having come
-    /// from it (and never lands on an external display that happens to be main).
-    private func placeUnderNotch(_ window: NSWindow) {
-        guard let screen = ScreenLocator.builtInScreen ?? NSScreen.main else {
-            window.center()
-            return
-        }
-        // Centred on the notch, which is the middle of the whole screen (a Dock at the
-        // side moves the middle of the usable area).
-        window.setFrameTopLeftPoint(NSPoint(x: screen.frame.midX - window.frame.width / 2,
-                                            y: screen.visibleFrame.maxY - 24))
     }
 
     /// Dropping the window when it closes gives back its memory (about 16 MB); it's
@@ -96,10 +83,34 @@ final class DockPresence {
     }
 }
 
+extension NSWindow {
+    /// Centred beneath the notch on the built-in display, so it reads as having come
+    /// from it (and never lands on an external display that happens to be main).
+    func placeUnderNotch() {
+        guard let screen = ScreenLocator.builtInScreen ?? NSScreen.main else {
+            center()
+            return
+        }
+        // Centred on the notch, which is the middle of the whole screen (a Dock at the
+        // side moves the middle of the usable area).
+        setFrameTopLeftPoint(NSPoint(x: screen.frame.midX - frame.width / 2,
+                                     y: screen.visibleFrame.maxY - 24))
+    }
+}
+
 /// Closes on Esc, as a settings or onboarding window should. (⌘W comes from the
-/// app's hidden main menu.)
+/// app's main menu.)
 final class EscapeClosingWindow: NSWindow {
+    /// When false, Esc and ⌘W are ignored and only the close button closes the window:
+    /// on the first welcome a stray key would otherwise skip the whole setup.
+    var closesFromKeyboard = true
+
     override func cancelOperation(_ sender: Any?) {
         performClose(sender)
+    }
+
+    override func performClose(_ sender: Any?) {
+        if !closesFromKeyboard, NSApp.currentEvent?.type == .keyDown { return }
+        super.performClose(sender)
     }
 }

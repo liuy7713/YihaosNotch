@@ -15,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: NotchController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard SingleInstance.claim() else {
+            NSApp.terminate(nil)
+            return
+        }
         viewModel = NotchViewModel(settings: settings, nowPlaying: nowPlaying, calendar: calendar, timer: timer)
         SettingsWindowController.shared.configure(settings: settings, calendar: calendar, mediaKeys: mediaKeys)
         WelcomeWindowController.shared.configure(settings: settings, calendar: calendar, mediaKeys: mediaKeys)
@@ -52,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             nowPlaying.refreshPosition()
             calendar.noteOpened()
         }
+        controller.onUserLeft = { [camera] in camera.deactivate() }
         controller.start()
         self.controller = controller
         SettingsWindowController.shared.onShow = { [weak controller] in controller?.dismissPanel() }
@@ -129,8 +134,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Never shown (the app has no menu bar), but it gives the app's windows the
-    /// standard keys: ⌘, for Settings, ⌘W to close, ⌘Q to quit, and editing.
+    /// Shown only while Settings or the welcome is open (the app has a menu bar only
+    /// then). It gives those windows the standard keys: ⌘, for Settings, ⌘W to close,
+    /// and editing.
+    ///
+    /// ⌘Q closes the window rather than quitting: with a Dock icon showing, it's an
+    /// easy way to dismiss Settings, but quitting would silently stop the notch until
+    /// the next login. Quit is still in this menu, Settings and the Dock menu.
     private static func makeMainMenu() -> NSMenu {
         func menu(_ title: String, _ items: [NSMenuItem]) -> NSMenuItem {
             let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
@@ -143,7 +153,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(menu("Yihao's Notch", [
             NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","),
             .separator(),
-            NSMenuItem(title: "Quit Yihao's Notch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
+            NSMenuItem(title: "Quit Yihao's Notch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""),
+            closeOnCommandQ,
         ]))
         main.addItem(menu("Edit", [
             NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"),
@@ -157,13 +168,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return main
     }
 
+    private static var closeOnCommandQ: NSMenuItem {
+        let item = NSMenuItem(title: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "q")
+        item.isHidden = true
+        item.allowsKeyEquivalentWhenHidden = true
+        return item
+    }
+
     @objc private func showSettings() {
         SettingsWindowController.shared.show()
     }
 
     // Opening the app again (e.g. from Finder or Spotlight) shows Settings, or the
     // welcome if it hasn't been finished.
+    // An update dragged over the running copy reaches it here too, so that starts the
+    // new version instead.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if SingleInstance.relaunchIfUpdated() { return false }
         if settings.needsWelcome {
             WelcomeWindowController.shared.show()
         } else {

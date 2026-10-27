@@ -199,6 +199,11 @@ made it and asks you to confirm once that you trust it. That's expected, not a f
 The welcome screen takes it from there. You'll need an administrator account for step
 3, and to repeat steps 2-4 for each new version. It works on MacBooks with a notch
 running macOS 15 or later.
+
+Updating: drag the new version into Applications as before, replacing the old one,
+then open it. If it says "Not Opened", repeat steps 2-4. Versions before 1.3.2 don't
+notice an update while they're running: if the notch still shows the old version,
+right-click the gear in the notch, choose Quit, and open the app again.
 TXT
 fi
 

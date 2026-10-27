@@ -16,12 +16,11 @@ struct CalendarItem: Identifiable, Equatable {
     func isOngoing(at now: Date) -> Bool { !isAllDay && start <= now && end > now }
     func hasEnded(at now: Date) -> Bool { end <= now }
 
-    /// Opens the video call if there is one, otherwise the event in Calendar.
+    /// Shows the event in Calendar. Only the Join button joins a call, so browsing the
+    /// agenda can never drop the user into a meeting that has ended or is days away.
     @MainActor
-    func open() {
-        if let meeting {
-            meeting.open()
-        } else if let eventIdentifier,
+    func openInCalendar() {
+        if let eventIdentifier,
                   let encoded = eventIdentifier.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
                   let url = URL(string: "ical://ekevent/\(encoded)?method=show&options=more") {
             NSWorkspace.shared.open(url)

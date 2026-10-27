@@ -33,25 +33,16 @@ enum Theme {
 
 extension AnyTransition {
     /// Outgoing content fades quickly; incoming content starts a beat later and
-    /// settles in from slightly smaller and soft-focused, so the two never read as a
-    /// double exposure. Reduce Motion gets a plain crossfade.
+    /// settles in from slightly smaller, so the two never read as a double exposure.
+    /// Reduce Motion gets a plain crossfade.
     static func contentSwap(reduceMotion: Bool) -> AnyTransition {
         if reduceMotion { return .opacity }
         return .asymmetric(
             insertion: .opacity
                 .combined(with: .scale(scale: 0.97))
-                .combined(with: .modifier(active: BlurEffect(radius: 4), identity: BlurEffect(radius: 0)))
                 .animation(Theme.swap.delay(0.1)),
             removal: .opacity.animation(.easeOut(duration: 0.12))
         )
-    }
-}
-
-struct BlurEffect: ViewModifier {
-    let radius: CGFloat
-
-    func body(content: Content) -> some View {
-        content.blur(radius: radius)
     }
 }
 

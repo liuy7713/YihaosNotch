@@ -166,6 +166,8 @@ final class NowPlayingService {
     private var anchorDate = Date()
 
     @ObservationIgnored private var players: [MusicSource: (update: PlayerUpdate, at: Date)] = [:]
+    /// Counts player reports, so a failed command can tell whether one arrived meanwhile.
+    @ObservationIgnored private var updatesApplied = 0
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var idleTask: Task<Void, Never>?
     /// How long paused music stays in the closed notch. Development aid:
@@ -220,8 +222,15 @@ final class NowPlayingService {
     // MARK: Controls
 
     func playPause() {
-        setPlaying(!isPlaying)
-        send("playpause")
+        let wasPlaying = isPlaying
+        let updatesBefore = updatesApplied
+        setPlaying(!wasPlaying)
+        // If the command never reached the player, take back the state shown in advance,
+        // unless the player has reported something real since.
+        send("playpause") { [weak self] in
+            guard let self, self.updatesApplied == updatesBefore else { return }
+            self.setPlaying(wasPlaying)
+        }
     }
 
     func nextTrack() { send("next track") }
@@ -261,6 +270,7 @@ final class NowPlayingService {
     // MARK: State
 
     private func apply(_ update: PlayerUpdate, from origin: MusicSource) {
+        updatesApplied += 1
         if update.isStopped {
             players[origin] = nil
         } else {
@@ -336,13 +346,22 @@ final class NowPlayingService {
     }
 
     /// Sends a command, then reads the player's real state a second later. A player
-    /// only notifies on a change, so a command that didn't take (Automation denied, a
-    /// hung player) would otherwise leave the app's guess, such as the paused state
-    /// `playPause` sets straight away, standing while music plays on.
-    private func send(_ command: String) {
-        guard let source, source.isRunning else { return }
+    /// only notifies on a change, so a command that didn't take (a slow or hung player)
+    /// would otherwise leave the app's guess, such as the paused state `playPause` sets
+    /// straight away, standing while music plays on. A command that failed outright
+    /// (most often because Automation is denied, when reading the state fails too)
+    /// calls `failed` instead.
+    private func send(_ command: String, failed: (() -> Void)? = nil) {
+        guard let source, source.isRunning else {
+            failed?()
+            return
+        }
         Task {
-            _ = await Osascript.run(source.script(command))
+            guard await Osascript.run(source.script(command)) != nil else {
+                log.error("\(source.rawValue, privacy: .public) didn't accept a command; Automation may be denied")
+                failed?()
+                return
+            }
             try? await Task.sleep(for: .seconds(1))
             await sync(source)
         }
@@ -421,16 +440,23 @@ final class NowPlayingService {
         artwork = nil
         accent = Theme.primary
         artworkTask = Task {
+            // Fetched, decoded and sampled off the main thread, which is busy animating
+            // the new track in.
             let image = source == .spotify
                 ? await Self.spotifyArtwork(knownURL: url)
                 : await Self.musicArtwork()
+            let accent = await Self.accent(of: image)
             guard !Task.isCancelled, self.track?.id == track.id else { return }
-            artwork = image
-            accent = image.flatMap(ArtworkColor.accent(from:)) ?? Theme.primary
+            artwork = image.map { NSImage(cgImage: $0, size: NSSize(width: $0.width, height: $0.height)) }
+            self.accent = accent ?? Theme.primary
         }
     }
 
-    private static func spotifyArtwork(knownURL: String?) async -> NSImage? {
+    private nonisolated static func accent(of image: CGImage?) async -> Color? {
+        image.flatMap(ArtworkColor.accent(from:))
+    }
+
+    private nonisolated static func spotifyArtwork(knownURL: String?) async -> CGImage? {
         var urlString = knownURL
         if urlString == nil || urlString?.isEmpty == true {
             urlString = await Osascript.run(MusicSource.spotify.script("return artwork url of current track"))
@@ -443,7 +469,7 @@ final class NowPlayingService {
 
     /// Only https URLs on Spotify's image CDNs are fetched; anything else the player
     /// reports (file://, other hosts) is ignored.
-    private static func isSpotifyArtwork(_ url: URL) -> Bool {
+    private nonisolated static func isSpotifyArtwork(_ url: URL) -> Bool {
         guard url.scheme == "https", let host = url.host?.lowercased() else { return false }
         return ["scdn.co", "spotifycdn.com"].contains { host == $0 || host.hasSuffix("." + $0) }
     }
@@ -454,7 +480,7 @@ final class NowPlayingService {
     /// Image decoders are a classic attack surface, and this process holds Camera and
     /// Accessibility, so only the formats album art actually uses are decoded, and only
     /// up to a sane size.
-    private static func downsampled(_ data: Data, maxPixels: Int = 320) -> NSImage? {
+    private nonisolated static func downsampled(_ data: Data, maxPixels: Int = 320) -> CGImage? {
         let allowedTypes = [UTType.jpeg.identifier, UTType.png.identifier]
         guard data.count <= 8_000_000,
               let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -466,13 +492,12 @@ final class NowPlayingService {
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixels,
         ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
     /// Music only hands artwork over as raw data, so the script writes it to a file.
     /// Each request gets its own file, so overlapping requests can't mix up images.
-    private static func musicArtwork() async -> NSImage? {
+    private nonisolated static func musicArtwork() async -> CGImage? {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("yihaosnotch-artwork-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: file) }

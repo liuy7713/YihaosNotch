@@ -69,7 +69,12 @@ fi
 echo "Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
-  pkill -x YihaosNotch 2>/dev/null && sleep 0.5 || true
+  # Only the installed copies: a test build running elsewhere (with development flags)
+  # is left alone.
+  for dir in "$INSTALL_DIR" "$OLD_INSTALL_DIR"; do
+    pkill -fx "$dir/$APP_NAME.app/Contents/MacOS/YihaosNotch" 2>/dev/null || true
+  done
+  sleep 0.5
   rm -rf "$INSTALL_DIR/$APP_NAME.app" "$OLD_INSTALL_DIR/$APP_NAME.app"
   ditto "$APP" "$INSTALL_DIR/$APP_NAME.app"
   open "$INSTALL_DIR/$APP_NAME.app"

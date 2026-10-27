@@ -27,8 +27,11 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
         if window == nil, let makeView {
             let permissions = WelcomePermissions(firstRun: settings?.needsWelcome ?? true)
             let hosting = NSHostingController(rootView: makeView(page, permissions) { [weak self] in self?.window?.close() })
-            hosting.sizingOptions = [.preferredContentSize]
+            // Sized here, once, so it can be placed: sized by SwiftUI after it appears,
+            // it was placed while tiny and then grew off to one side.
+            hosting.sizingOptions = []
             let window = EscapeClosingWindow(contentViewController: hosting)
+            window.closesFromKeyboard = !(settings?.needsWelcome ?? true)
             window.title = "Welcome to Yihao's Notch"
             window.styleMask = [.titled, .closable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
@@ -41,7 +44,10 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
             // Only the close button: the others would just sit there disabled.
             window.standardWindowButton(.miniaturizeButton)?.isHidden = true
             window.standardWindowButton(.zoomButton)?.isHidden = true
-            window.center()
+            // The view's size plus the transparent title bar it sits beneath, as Settings.
+            let content = NSRect(origin: .zero, size: WelcomeView.size)
+            window.setContentSize(NSWindow.frameRect(forContentRect: content, styleMask: [.titled, .closable]).size)
+            window.placeUnderNotch()
             self.window = window
             self.permissions = permissions
         }

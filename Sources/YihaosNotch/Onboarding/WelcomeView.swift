@@ -25,6 +25,8 @@ struct WelcomeView: View {
         _page = State(initialValue: min(max(startPage, 0), 2))
     }
 
+    static let size = NSSize(width: 640, height: 470)
+
     /// Development aid: `--preview-welcome N` opens the welcome screen at page N (0–2).
     static var previewPage: Int {
         let arguments = CommandLine.arguments
@@ -49,7 +51,7 @@ struct WelcomeView: View {
 
             footer
         }
-        .frame(width: 640, height: 470)
+        .frame(width: Self.size.width, height: Self.size.height)
         .background(Color.black)
         .preferredColorScheme(.dark)
     }
@@ -159,6 +161,13 @@ private struct HelloPage: View {
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                        // ⌘Q closes windows rather than quitting, and Esc can't skip the
+                        // first welcome, so quitting gets a button of its own here.
+                        if WelcomePermissions.isRunningFromDiskImage {
+                            Button("Quit") { NSApp.terminate(nil) }
+                                .controlSize(.small)
+                                .padding(.top, 6)
+                        }
                     }
                 }
                 .padding(14)

@@ -53,14 +53,14 @@ struct NotchRootView: View {
         }
     }
 
-    /// On close the content draws in towards the notch: it shrinks toward the top,
-    /// softens and fades a little ahead of the shape, so the shape never shrinks around
-    /// visibly clipped content.
+    /// On close the content draws in towards the notch: it shrinks toward the top and
+    /// fades a little ahead of the shape, so the shape never shrinks around visibly
+    /// clipped content. (No blur: blurring made every frame redraw the panel's text on
+    /// the CPU, the app's single largest energy cost.)
     private var panelRemoval: AnyTransition {
         if reduceMotion { return .opacity.animation(.easeIn(duration: 0.12)) }
         return AnyTransition.opacity
             .combined(with: .scale(scale: 0.9, anchor: .top))
-            .combined(with: .modifier(active: BlurEffect(radius: 6), identity: BlurEffect(radius: 0)))
             // Ease-out: the fade starts on the very first frame, in step with the shape.
             .animation(.easeOut(duration: 0.2))
     }

@@ -10,6 +10,8 @@ import SwiftUI
 @MainActor
 final class NotchController {
     var onOpen: (() -> Void)?
+    /// Called as the user steps away (see `userLeft`).
+    var onUserLeft: (() -> Void)?
 
     private let viewModel: NotchViewModel
     private let settings: AppSettings
@@ -52,7 +54,9 @@ final class NotchController {
         guard let index = arguments.firstIndex(of: "--simulate-notch"), index + 1 < arguments.count
         else { return nil }
         let parts = arguments[index + 1].split(separator: "x").compactMap { Double($0) }
-        return parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
+        // Only plausible sizes: anything else (nan, inf, 0, huge) would wreck the layout.
+        guard parts.count == 2, (60...400).contains(parts[0]), (16...60).contains(parts[1]) else { return nil }
+        return CGSize(width: parts[0], height: parts[1])
     }()
 
     /// Room around the open shape for its shadow. The panel window is exactly the open
@@ -88,6 +92,31 @@ final class NotchController {
         })
         observers.append(workspace.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: relayout))
+
+        // While the user is away (screen locked, display or Mac asleep, another user
+        // switched in) no pointer events arrive to close the panel, so the camera mirror
+        // could stay on. Close it as they leave, and lay out afresh when they're back.
+        let away: @Sendable (Notification) -> Void = { _ in
+            MainActor.assumeIsolated { self.userLeft() }
+        }
+        let back: @Sendable (Notification) -> Void = { _ in
+            MainActor.assumeIsolated {
+                self.armSuppressedUntil = .now + 1
+                self.layout()
+            }
+        }
+        for name in [NSWorkspace.sessionDidResignActiveNotification, NSWorkspace.screensDidSleepNotification,
+                     NSWorkspace.willSleepNotification] {
+            observers.append(workspace.addObserver(forName: name, object: nil, queue: .main, using: away))
+        }
+        for name in [NSWorkspace.sessionDidBecomeActiveNotification, NSWorkspace.screensDidWakeNotification] {
+            observers.append(workspace.addObserver(forName: name, object: nil, queue: .main, using: back))
+        }
+        let distributed = DistributedNotificationCenter.default()
+        observers.append(distributed.addObserver(
+            forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main, using: away))
+        observers.append(distributed.addObserver(
+            forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main, using: back))
 
         if pinnedOpen { open() }
         if previewCycle { runPreviewCycle() }
@@ -155,6 +184,21 @@ final class NotchController {
 
         // A pointer already sitting where a panel just moved gets no "entered" event.
         pointerMoved()
+    }
+
+    /// Closes the panel (and the camera mirror with it) and stops following the pointer,
+    /// even when `--preview-open` pins it.
+    private func userLeft() {
+        armTask?.cancel()
+        closeTask?.cancel()
+        closeTask = nil
+        stopPointerTracking()
+        viewModel.state = .closed
+        viewModel.showingCamera = false
+        panel?.ignoresMouseEvents = true
+        // Stopped straight away: the mirror's own stop waits for the close animation,
+        // which may not run until the display wakes.
+        onUserLeft?()
     }
 
     private func hideAndReset() {
@@ -305,6 +349,11 @@ final class NotchController {
         armTask = Task { [weak self, delay = settings.hoverDelay] in
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let self, self.viewModel.state == .arming else { return }
+            // A drag that began after the notch armed (a file or a window passing by).
+            guard NSEvent.pressedMouseButtons == 0 else {
+                self.disarm()
+                return
+            }
             self.open()
         }
     }

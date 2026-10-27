@@ -142,6 +142,7 @@ struct SettingsView: View {
                 .foregroundStyle(Theme.secondary)
             Button("Quit") { NSApp.terminate(nil) }
                 .controlSize(.small)
+                .help("Stops the notch until Yihao's Notch is opened again")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

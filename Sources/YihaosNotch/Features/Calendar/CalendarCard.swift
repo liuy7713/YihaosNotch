@@ -310,8 +310,11 @@ private struct EventRow: View {
     /// The Join button becomes solid from 10 minutes before the start.
     private var joinIsUrgent: Bool { isToday && (isOngoing || (0...10).contains(minutesUntilStart)) }
 
+    /// A call can still be joined until the event ends.
+    private var joinableMeeting: MeetingLink? { hasEnded ? nil : item.meeting }
+
     var body: some View {
-        Button { item.open() } label: {
+        Button { item.openInCalendar() } label: {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                     .fill(item.color)
@@ -327,8 +330,9 @@ private struct EventRow: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                if let meeting = item.meeting, !hasEnded {
-                    JoinButton(provider: meeting.provider, urgent: joinIsUrgent)
+                // Room for the Join button, which sits over the row as a separate button.
+                if joinableMeeting != nil {
+                    Color.clear.frame(width: JoinButton.width, height: 1)
                 }
             }
             .padding(.horizontal, CalendarCard.inset)
@@ -338,7 +342,13 @@ private struct EventRow: View {
         }
         .buttonStyle(PressableStyle())
         .hoverHighlight(cornerRadius: 9)
-        .help(item.meeting.map { "Join on \($0.provider.name)" } ?? "Open in Calendar")
+        .help("Open in Calendar")
+        .overlay(alignment: .trailing) {
+            if let meeting = joinableMeeting {
+                JoinButton(meeting: meeting, urgent: joinIsUrgent)
+                    .padding(.trailing, CalendarCard.inset - JoinButton.slop)
+            }
+        }
     }
 
     private var subtitle: String {
@@ -372,17 +382,30 @@ private struct EventRow: View {
     }
 }
 
-/// Icon-only, so event titles keep the room; the tooltip and VoiceOver name the service.
+/// The only control that joins a call. Icon-only, so event titles keep the room; the
+/// tooltip and VoiceOver name the service.
 private struct JoinButton: View {
-    let provider: MeetingLink.Provider
+    let meeting: MeetingLink
     let urgent: Bool
 
+    static let width: CGFloat = 28
+    /// Extra clickable margin around the capsule, so a near miss still joins rather
+    /// than opening Calendar.
+    static let slop: CGFloat = 6
+
     var body: some View {
-        Image(systemName: "video.fill")
-            .font(.system(size: 9.5, weight: .bold))
-            .foregroundStyle(urgent ? Color.black : Theme.primary)
-            .frame(width: 28, height: 20)
-            .background(Capsule().fill(urgent ? Theme.primary : Theme.fillStrong))
-            .accessibilityLabel("Join on \(provider.name)")
+        Button { meeting.open() } label: {
+            Image(systemName: "video.fill")
+                .font(.system(size: 9.5, weight: .bold))
+                .foregroundStyle(urgent ? Color.black : Theme.primary)
+                .frame(width: Self.width, height: 20)
+                .background(Capsule().fill(urgent ? Theme.primary : Theme.fillStrong))
+                .padding(.horizontal, Self.slop)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .help("Join on \(meeting.provider.name)")
+        .accessibilityLabel("Join on \(meeting.provider.name)")
     }
 }

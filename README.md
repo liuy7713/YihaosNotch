@@ -15,8 +15,9 @@ fingers), it shows:
 - **Now Playing** for Music and Spotify: artwork, controls, a scrubber and a synced
   lyric line.
 - **Calendar**: a five-day strip you can scroll a week either way, and the agenda for
-  the chosen day. Zoom, Teams, Meet and Webex links get a Join button that opens the
-  meeting straight in its app.
+  the chosen day. Clicking an event shows it in Calendar; Zoom, Teams, Meet and Webex
+  links get a Join button (until the event ends) that opens the meeting straight in
+  its app.
 - **Timer**: click the clock in the header.
 - **Camera mirror**: a quick check before a call, with Center Stage (keeps you framed as
   you move) on cameras that have it, such as recent MacBooks' 12 MP camera, toggled from a
@@ -101,8 +102,16 @@ Open the app again (from Finder or Spotlight), or click the gear in the open pan
 show Settings; it has no Dock icon or menu bar item. Settings opens beneath the notch;
 its footer has Show Tour… (the welcome's tour and permissions) and Quit. While Settings
 or the welcome is open the app shows a Dock icon, so the window gets the keyboard (macOS
-won't give it to an app without one) and ⌘, ⌘W, Esc and ⌘Q work; right-clicking the
-gear offers Settings… and Quit.
+won't give it to an app without one) and ⌘, ⌘W and Esc work. ⌘Q closes the window
+too rather than quitting, since quitting would silently stop the notch; quit from the
+footer, the Dock menu or by right-clicking the gear. On the very first welcome, Esc and
+⌘W do nothing, so a stray key can't skip the setup.
+
+Only one copy runs at a time. Opening a second copy (say, the one on the disk image)
+hands over to the running one, unless it's a newer build, in which case the older copy
+is told to quit. Opening the app again after an update has been dragged over the
+running copy restarts it on the new version. A launch with arguments (the development
+flags below) is exempt, so a test build runs beside the installed app.
 
 ## Releasing
 
@@ -115,7 +124,7 @@ To give the app to someone, build a disk image:
 They open it, drag the app into Applications, and the welcome screen takes it from
 there: no Terminal, no Xcode. Before each release, raise the version with
 `./scripts/bump-version.sh patch|minor|major` (fixes, features, big changes); it also
-raises the build number, which macOS uses to tell which copy is newer. Each release is
+raises the build number, which macOS and the app use to tell which copy is newer. Each release is
 tagged `v<version>` in git. The first run asks whether the script
 may control Finder, which it uses to lay out the disk image window.
 
@@ -147,7 +156,7 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--preview-cycle` | Opens and closes the panel every 1.5 s (for tuning animations). |
 | `--preview-timer` | Starts a 25-minute timer and shows the timer view. |
 | `--preview-swap` | Flips the right column between calendar and timer every 2 s. |
-| `--simulate-notch WxH` | Lays out as if the notch were W×H points, to check other models and display scalings (a 14" ranges from about 140×24 to 225×38). |
+| `--simulate-notch WxH` | Lays out as if the notch were W×H points, to check other models and display scalings (a 14" ranges from about 140×24 to 225×38). Accepts 60–400 × 16–60. |
 | `--music-idle-seconds N` | Paused music leaves the closed notch after N seconds instead of 120. |
 | `--preview-settings` | Opens Settings at launch. |
 | `--preview-welcome N` | Shows the welcome screen at page N (0–2), even if it has been finished. |

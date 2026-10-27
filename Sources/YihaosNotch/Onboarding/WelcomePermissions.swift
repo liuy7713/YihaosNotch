@@ -52,8 +52,18 @@ final class WelcomePermissions {
 
     let installedPlayers = MusicSource.allCases.filter { $0.appURL != nil }
 
+    /// The first welcome registers the default; a later one changes the login item only
+    /// if the user moved the switch.
+    @ObservationIgnored private let firstRun: Bool
+    @ObservationIgnored private let initiallyWanted: Bool
+
     init(firstRun: Bool) {
-        wantsLaunchAtLogin = firstRun || SMAppService.mainApp.status == .enabled
+        // "On" includes waiting for approval in Login Items, as in `applyLaunchAtLogin`.
+        let status = SMAppService.mainApp.status
+        let wanted = firstRun || status == .enabled || status == .requiresApproval
+        wantsLaunchAtLogin = wanted
+        self.firstRun = firstRun
+        initiallyWanted = wanted
     }
 
     func startWatching() {
@@ -115,6 +125,7 @@ final class WelcomePermissions {
     /// anything. A copy running from the disk image is never registered: that path
     /// disappears when the image is ejected.
     func applyLaunchAtLogin() {
+        guard firstRun || wantsLaunchAtLogin != initiallyWanted else { return }
         let service = SMAppService.mainApp
         let isOn = service.status == .enabled || service.status == .requiresApproval
         if wantsLaunchAtLogin, !isOn, !Self.isRunningFromDiskImage {
@@ -145,9 +156,10 @@ final class WelcomePermissions {
     /// Where the app is running from, if that's somewhere it shouldn't be: straight from
     /// the disk image, or a quarantined copy macOS has moved aside ("translocated").
     /// Either way it disappears later, along with "Open at login".
-    static var isRunningFromDiskImage: Bool {
-        let path = Bundle.main.bundlePath
-        return path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/")
+    static var isRunningFromDiskImage: Bool { isDiskImagePath(Bundle.main.bundlePath) }
+
+    nonisolated static func isDiskImagePath(_ path: String) -> Bool {
+        path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/")
     }
 
     /// Laptops have an internal battery; desktop Macs never have a notch.

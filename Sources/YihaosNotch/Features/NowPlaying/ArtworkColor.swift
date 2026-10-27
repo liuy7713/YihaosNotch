@@ -4,8 +4,7 @@ import SwiftUI
 enum ArtworkColor {
     /// Picks the most vivid colour in the artwork and lifts it so it reads on black.
     /// Greyscale artwork falls back to white rather than a muddy grey.
-    static func accent(from image: NSImage) -> Color? {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+    static func accent(from cgImage: CGImage) -> Color? {
         let side = 12
         var pixels = [UInt8](repeating: 0, count: side * side * 4)
         let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
