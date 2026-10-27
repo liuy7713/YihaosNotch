@@ -47,7 +47,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             window.setFrameAutosaveName(frameName)
             self.window = window
         }
-        NSApp.activate()
+        DockPresence.shared.show(for: "settings")
         window?.makeKeyAndOrderFront(nil)
     }
 
@@ -68,6 +68,31 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// rebuilt the next time Settings opens.
     func windowWillClose(_ notification: Notification) {
         window = nil
+        DockPresence.shared.hide(for: "settings")
+    }
+}
+
+/// Gives the app a Dock icon while any of its windows is open, and activates it.
+///
+/// The app normally has no Dock icon, and since macOS 14 such an app asking to be
+/// activated is turned down while another app is in use: its window appears, but the
+/// keyboard stays with the app beneath, so ⌘W, Esc and ⌘Q go there instead. With a
+/// Dock icon the request is honoured (as for any app whose settings are open), and
+/// the window can also be reached with ⌘Tab.
+@MainActor
+final class DockPresence {
+    static let shared = DockPresence()
+    private var holders: Set<String> = []
+
+    func show(for holder: String) {
+        holders.insert(holder)
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+    }
+
+    func hide(for holder: String) {
+        holders.remove(holder)
+        if holders.isEmpty { NSApp.setActivationPolicy(.accessory) }
     }
 }
 

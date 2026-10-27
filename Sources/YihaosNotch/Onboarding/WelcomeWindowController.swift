@@ -45,10 +45,9 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
             self.window = window
             self.permissions = permissions
         }
-        // The app normally has no Dock icon, so a welcome window buried under other
-        // windows would be unreachable. It gets one while the welcome is open.
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate()
+        // A Dock icon while it's open: it can't be buried out of reach, and it gets the
+        // keyboard (see DockPresence).
+        DockPresence.shared.show(for: "welcome")
         window?.makeKeyAndOrderFront(nil)
     }
 
@@ -57,7 +56,7 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
         permissions?.applyLaunchAtLogin()
         permissions = nil
         window = nil
-        NSApp.setActivationPolicy(.accessory)
+        DockPresence.shared.hide(for: "welcome")
         onFinish?()
     }
 }

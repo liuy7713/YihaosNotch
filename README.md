@@ -99,8 +99,10 @@ security delete-keychain ~/.yihaos-notch/signing/*.keychain-db && rm -rf ~/.yiha
 
 Open the app again (from Finder or Spotlight), or click the gear in the open panel, to
 show Settings; it has no Dock icon or menu bar item. Settings opens beneath the notch;
-its footer has Show Tour… (the welcome's tour and permissions) and Quit. ⌘, ⌘W, Esc
-and ⌘Q work, and right-clicking the gear offers Settings… and Quit.
+its footer has Show Tour… (the welcome's tour and permissions) and Quit. While Settings
+or the welcome is open the app shows a Dock icon, so the window gets the keyboard (macOS
+won't give it to an app without one) and ⌘, ⌘W, Esc and ⌘Q work; right-clicking the
+gear offers Settings… and Quit.
 
 ## Releasing
 
