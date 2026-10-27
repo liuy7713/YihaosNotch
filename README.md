@@ -19,7 +19,8 @@ fingers), it shows:
   meeting straight in its app.
 - **Timer**: click the clock in the header.
 - **Camera mirror**: a quick check before a call, with Center Stage (keeps you framed as
-  you move) on cameras that support it, toggled from a button in the mirror.
+  you move) on cameras that have it, such as recent MacBooks' 12 MP camera, toggled from a
+  button in the mirror.
 
 Optionally, the volume and brightness keys show a small indicator in the notch instead
 of the macOS pop-up.

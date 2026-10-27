@@ -10,14 +10,15 @@ final class CaptureSession: @unchecked Sendable {
     private var device: AVCaptureDevice?
 
     /// Starts the session and reports on the main actor whether it's running (it may
-    /// not be: no camera, or one held exclusively by another app), and the camera.
-    func start(completion: @escaping @MainActor @Sendable (_ running: Bool, _ device: AVCaptureDevice?) -> Void) {
+    /// not be: no camera, or one held exclusively by another app), and whether the
+    /// camera's format can do Center Stage.
+    func start(completion: @escaping @MainActor @Sendable (_ running: Bool, _ centerStageSupported: Bool) -> Void) {
         queue.async { [self] in
             configureIfNeeded()
             if !session.isRunning { session.startRunning() }
             let running = session.isRunning
-            nonisolated(unsafe) let device = self.device
-            Task { @MainActor in completion(running, device) }
+            let supported = device?.activeFormat.isCenterStageSupported ?? false
+            Task { @MainActor in completion(running, supported) }
         }
     }
 
@@ -59,12 +60,14 @@ final class CameraController {
     /// The camera couldn't be started (missing, or in use elsewhere), so the mirror
     /// says so instead of waiting on a placeholder.
     private(set) var isUnavailable = false
-    /// The camera can do Center Stage (follow and frame you as you move): the 12 MP
-    /// Center Stage cameras, the Studio Display, an iPhone as webcam.
+    /// The camera can do Center Stage (follow and frame you as you move), as the
+    /// built-in 12 MP Center Stage cameras can.
     private(set) var supportsCenterStage = false
-    /// Center Stage is actually framing the picture right now.
-    private(set) var isCenterStageActive = false
-    @ObservationIgnored private var centerStageObservation: NSKeyValueObservation?
+    /// Center Stage is switched on for this app: the user's choice, which Control
+    /// Center's Video Effects can change too. (Whether it's framing at this moment
+    /// depends on the camera's current format, so it isn't what's shown or saved.)
+    private(set) var isCenterStageEnabled = AppSettings.shared.cameraCenterStage
+    @ObservationIgnored private let centerStageWatcher = CenterStageWatcher()
     @ObservationIgnored let capture = CaptureSession()
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
@@ -111,10 +114,13 @@ final class CameraController {
     }
 
     private func startCapture() {
-        capture.start { running, device in
+        // Before the camera starts, so the first frame is already framed rather than
+        // zooming in a moment after the mirror appears. Harmless on cameras without it.
+        applyCenterStage()
+        capture.start { running, centerStageSupported in
             guard self.wantsRunning else { return }
             self.isUnavailable = !running
-            if let device { self.prepareCenterStage(for: device) }
+            self.supportsCenterStage = centerStageSupported
         }
     }
 
@@ -128,30 +134,21 @@ final class CameraController {
         applyCenterStage()
     }
 
-    private func prepareCenterStage(for device: AVCaptureDevice) {
-        supportsCenterStage = device.activeFormat.isCenterStageSupported
-        guard supportsCenterStage else { return }
-        applyCenterStage()
-        isCenterStageActive = device.isCenterStageActive
-        // Follows changes made from Control Center too, and keeps the choice in step.
-        centerStageObservation = device.observe(\.isCenterStageActive, options: [.new]) { _, change in
-            let active = change.newValue ?? false
-            Task { @MainActor in
-                self.isCenterStageActive = active
-                if self.wantsRunning { AppSettings.shared.cameraCenterStage = active }
-            }
-        }
-    }
-
     private func applyCenterStage() {
-        guard supportsCenterStage else { return }
         AVCaptureDevice.centerStageControlMode = .cooperative
         AVCaptureDevice.isCenterStageEnabled = AppSettings.shared.cameraCenterStage
+        isCenterStageEnabled = AVCaptureDevice.isCenterStageEnabled
+        // Control Center can switch it while the mirror is open; that's the user's
+        // choice too, so it's followed and remembered.
+        centerStageWatcher.onChange = { [weak self] enabled in
+            guard let self else { return }
+            isCenterStageEnabled = enabled
+            AppSettings.shared.cameraCenterStage = enabled
+        }
     }
 
     func deactivate() {
         wantsRunning = false
-        centerStageObservation = nil
         capture.stop()
     }
 
@@ -165,6 +162,33 @@ final class CameraController {
         case .authorized: .granted
         case .notDetermined: .notDetermined
         default: .denied
+        }
+    }
+}
+
+/// Observes the class-level `AVCaptureDevice.isCenterStageEnabled` (key
+/// "centerStageEnabled"), which Control Center writes in cooperative mode. Swift's
+/// block-based KVO only works on instances, so this is the classic kind. `onChange`
+/// is only set and called on the main thread.
+private final class CenterStageWatcher: NSObject, @unchecked Sendable {
+    var onChange: (@MainActor (Bool) -> Void)?
+    private let target = AVCaptureDevice.self as AnyObject as! NSObject
+
+    override init() {
+        super.init()
+        target.addObserver(self, forKeyPath: "centerStageEnabled", options: [.new], context: nil)
+    }
+
+    deinit {
+        target.removeObserver(self, forKeyPath: "centerStageEnabled")
+    }
+
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?,
+                               change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
+        let enabled = change?[.newKey] as? Bool ?? AVCaptureDevice.isCenterStageEnabled
+        // In order, and only when the value differs from what's shown.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.onChange?(enabled) }
         }
     }
 }

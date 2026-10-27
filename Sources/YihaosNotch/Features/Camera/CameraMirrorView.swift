@@ -25,7 +25,7 @@ struct CameraMirrorView: View {
                     .opacity(camera.isLive ? 1 : 0)
                 if camera.isLive, camera.supportsCenterStage {
                     CenterStageButton()
-                        .padding(8)
+                        .padding(10)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .transition(.opacity)
                 }
@@ -56,7 +56,7 @@ private struct CenterStageButton: View {
     @Environment(CameraController.self) private var camera
 
     var body: some View {
-        let on = camera.isCenterStageActive
+        let on = camera.isCenterStageEnabled
         Button {
             camera.setCenterStage(!on)
         } label: {
@@ -68,8 +68,9 @@ private struct CenterStageButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(PressableStyle())
+        .hoverHighlight(cornerRadius: 13)
         .animation(.easeOut(duration: 0.2), value: on)
-        .help(on ? "Center Stage is on: it keeps you in frame" : "Center Stage")
+        .help(on ? "Center Stage: On (keeps you in frame)" : "Center Stage: Off")
         .accessibilityLabel("Center Stage")
         .accessibilityAddTraits(on ? .isSelected : [])
     }
