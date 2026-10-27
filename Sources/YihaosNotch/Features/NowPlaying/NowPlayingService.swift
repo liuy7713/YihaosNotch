@@ -181,6 +181,18 @@ final class NowPlayingService {
     private(set) var accent: Color = Theme.primary
     /// Synced lyrics for the current track, when LRCLIB has them.
     private(set) var lyrics: Lyrics?
+    /// Off: nothing is looked up, and nothing leaves the Mac.
+    @ObservationIgnored var lyricsEnabled = true {
+        didSet {
+            guard lyricsEnabled != oldValue else { return }
+            if lyricsEnabled, let track {
+                loadLyrics(for: track)
+            } else {
+                lyricsTask?.cancel()
+                lyrics = nil
+            }
+        }
+    }
 
     private var positionAnchor: Double = 0
     private var anchorDate = Date()
@@ -419,6 +431,10 @@ final class NowPlayingService {
 
     private func loadLyrics(for track: Track) {
         lyricsTask?.cancel()
+        guard lyricsEnabled else {
+            lyrics = nil
+            return
+        }
         if let cached = lyricsCache[track.id] {
             lyrics = cached
             return

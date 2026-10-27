@@ -44,6 +44,15 @@ final class AppSettings {
     var eventReminderMinutes: Int {
         didSet { defaults.set(eventReminderMinutes, forKey: Key.eventReminder) }
     }
+    /// Synced lyrics in the panel, looked up on LRCLIB (the app's only network use).
+    var showLyrics: Bool {
+        didSet { defaults.set(showLyrics, forKey: Key.lyrics) }
+    }
+    /// Calendars left out of the panel and the countdown, by identifier. Stored as the
+    /// ones hidden rather than shown, so a calendar added later appears by default.
+    var hiddenCalendars: Set<String> {
+        didSet { defaults.set(Array(hiddenCalendars).sorted(), forKey: Key.hiddenCalendars) }
+    }
     /// Center Stage in the camera mirror, when the camera supports it.
     var cameraCenterStage: Bool {
         didSet { defaults.set(cameraCenterStage, forKey: Key.centerStage) }
@@ -73,6 +82,7 @@ final class AppSettings {
             Key.headphones: true,
             Key.welcome: 0,
             Key.centerStage: true,
+            Key.lyrics: true,
         ])
         openTrigger = OpenTrigger(rawValue: d.string(forKey: Key.openTrigger) ?? "") ?? .hover
         hoverDelay = d.double(forKey: Key.hoverDelay)
@@ -85,6 +95,8 @@ final class AppSettings {
         showHeadphonesActivity = d.bool(forKey: Key.headphones)
         welcomeCompleted = d.integer(forKey: Key.welcome)
         cameraCenterStage = d.bool(forKey: Key.centerStage)
+        showLyrics = d.bool(forKey: Key.lyrics)
+        hiddenCalendars = Set(d.stringArray(forKey: Key.hiddenCalendars) ?? [])
     }
 
     private enum Key {
@@ -99,5 +111,7 @@ final class AppSettings {
         static let headphones = "showHeadphonesActivity"
         static let welcome = "welcomeCompleted"
         static let centerStage = "cameraCenterStage"
+        static let lyrics = "showLyrics"
+        static let hiddenCalendars = "hiddenCalendars"
     }
 }

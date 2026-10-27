@@ -10,6 +10,7 @@ struct SettingsView: View {
     let mediaKeys: MediaKeyController
 
     @State private var loginItemStatus = SMAppService.mainApp.status
+    @State private var choosingCalendars = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,7 +28,7 @@ struct SettingsView: View {
 
     private var form: some View {
         Form {
-            Section("Opening") {
+            Section("General") {
                 VStack(alignment: .leading, spacing: 6) {
                     Picker("Open the panel by", selection: $settings.openTrigger) {
                         Text("Hovering").tag(OpenTrigger.hover)
@@ -55,6 +56,14 @@ struct SettingsView: View {
                     Toggle("Haptic feedback", isOn: $settings.hapticsEnabled)
                     Caption("When the panel opens and as you scroll through days.")
                 }
+                Toggle("Open at login", isOn: launchAtLogin)
+                // macOS can accept the registration but hold it until the user approves
+                // it in Login Items, so the switch alone would claim it's on.
+                if loginItemStatus == .requiresApproval {
+                    LabeledContent("Needs your approval in System Settings") {
+                        Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
+                    }
+                }
             }
 
             Section("Calendar") {
@@ -71,6 +80,14 @@ struct SettingsView: View {
                 }
                 // The countdown comes from the calendar.
                 .disabled(!settings.calendarEnabled)
+                if settings.calendarEnabled, calendar.access == .granted, !calendar.calendars.isEmpty {
+                    LabeledContent("Calendars") {
+                        Button(calendarsSummary) { choosingCalendars = true }
+                            .popover(isPresented: $choosingCalendars, arrowEdge: .trailing) {
+                                CalendarPicker(calendars: calendar.calendars, hidden: $settings.hiddenCalendars)
+                            }
+                    }
+                }
                 if settings.calendarEnabled, calendar.access != .granted {
                     LabeledContent("Calendar access is off") {
                         if calendar.access == .notDetermined {
@@ -82,15 +99,17 @@ struct SettingsView: View {
                 }
             }
 
-            Section {
+            Section("Music") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Synced lyrics", isOn: $settings.showLyrics)
+                    Caption("Looked up on LRCLIB using the track's title, artist, album and length.")
+                }
+            }
+
+            Section("In the notch") {
                 Toggle("Music while it's playing", isOn: $settings.showMusicActivity)
                 Toggle("Charging and low battery", isOn: $settings.showBatteryActivity)
                 Toggle("Headphones connecting", isOn: $settings.showHeadphonesActivity)
-            } header: {
-                Text("In the notch")
-            } footer: {
-                Caption("Shown beside the notch while it's closed.")
-                    .padding(.leading, 10)
             }
 
             Section {
@@ -109,20 +128,10 @@ struct SettingsView: View {
             } header: {
                 Text("Volume and brightness")
             } footer: {
-                Caption("Replaces the macOS pop-up. The volume-change sound isn't played.")
+                Caption("Replaces the macOS pop-up, without its sound. With an external keyboard, key presses are checked only for its brightness keys.")
                     .padding(.leading, 10)
             }
 
-            Section {
-                Toggle("Open at login", isOn: launchAtLogin)
-                // macOS can accept the registration but hold it until the user approves
-                // it in Login Items, so the switch alone would claim it's on.
-                if loginItemStatus == .requiresApproval {
-                    LabeledContent("Needs your approval in System Settings") {
-                        Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
-                    }
-                }
-            }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
@@ -152,6 +161,11 @@ struct SettingsView: View {
 
     static let width: CGFloat = 480
 
+    private var calendarsSummary: String {
+        let shown = calendar.calendars.filter { !settings.hiddenCalendars.contains($0.id) }.count
+        return shown == calendar.calendars.count ? "All" : "\(shown) of \(calendar.calendars.count)"
+    }
+
     private static var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
     }
@@ -162,7 +176,7 @@ struct SettingsView: View {
     /// points to spare, and the form scrolls there (Quit stays in the footer).
     static var height: CGFloat {
         let available = (ScreenLocator.builtInScreen ?? NSScreen.main)?.visibleFrame.height ?? 900
-        return max(360, min(796, available - 60))
+        return max(360, min(900, available - 60))
     }
 
     private var launchAtLogin: Binding<Bool> {
@@ -179,6 +193,51 @@ struct SettingsView: View {
     }
 }
 
+/// Which calendars the panel and the countdown use, grouped by account.
+private struct CalendarPicker: View {
+    let calendars: [CalendarSource]
+    @Binding var hidden: Set<String>
+
+    private var accounts: [String] {
+        calendars.map(\.account).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(accounts, id: \.self) { account in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(account)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.tertiary)
+                        ForEach(calendars.filter { $0.account == account }) { source in
+                            Toggle(isOn: shown(source.id)) {
+                                HStack(spacing: 6) {
+                                    Circle().fill(source.color).frame(width: 8, height: 8)
+                                    Text(source.title).lineLimit(1)
+                                }
+                            }
+                            .toggleStyle(.checkbox)
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .frame(width: 260, alignment: .leading)
+        }
+        .frame(maxHeight: 380)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func shown(_ id: String) -> Binding<Bool> {
+        Binding {
+            !hidden.contains(id)
+        } set: { show in
+            if show { hidden.remove(id) } else { hidden.insert(id) }
+        }
+    }
+}
+
 /// A short explanatory line under a control or section.
 private struct Caption: View {
     let text: String
@@ -189,6 +248,7 @@ private struct Caption: View {
         Text(text)
             .font(.system(size: 11))
             .foregroundStyle(Theme.tertiary)
+            .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             // Section footers would otherwise sit at the trailing edge.
             .frame(maxWidth: .infinity, alignment: .leading)

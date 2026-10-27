@@ -66,26 +66,36 @@ final class NotchViewModel {
     /// The highest-priority activity right now: brief events (power, volume,
     /// headphones, a finished timer), then a running timer, then music that's
     /// playing, then an imminent calendar event, then music paused in the last two
-    /// minutes.
+    /// minutes. A meeting that's about to start (or just has) jumps the queue.
     var activity: LiveActivity? {
-        let event: LiveActivity? = if settings.calendarEnabled, settings.eventReminderMinutes > 0,
-            let item = calendar.imminentEvent(withinMinutes: settings.eventReminderMinutes) {
-            .event(title: item.title, start: item.start, color: item.color)
-        } else {
-            nil
+        var event: LiveActivity?
+        var eventIsStarting = false
+        if settings.calendarEnabled, settings.eventReminderMinutes > 0,
+           let item = calendar.imminentEvent(withinMinutes: settings.eventReminderMinutes) {
+            event = .event(title: item.title, start: item.start, color: item.color)
+            eventIsStarting = Self.startingWindow.contains(item.start.timeIntervalSince(calendar.now))
         }
         return Self.prioritise(transient: transient,
                                timerRunning: timer.isActive,
                                hasTrack: settings.showMusicActivity && nowPlaying.track != nil,
                                isPlaying: nowPlaying.isPlaying,
                                recentlyPlayed: nowPlaying.isRecentlyActive,
-                               event: event)
+                               event: event,
+                               eventIsStarting: eventIsStarting)
     }
+
+    /// Seconds until the start during which a meeting takes the wings from a timer or
+    /// music: from a minute before until two minutes after.
+    static let startingWindow: ClosedRange<TimeInterval> = -120...60
 
     /// The priority rules on their own, so they can be checked without live services.
     static func prioritise(transient: LiveActivity?, timerRunning: Bool, hasTrack: Bool,
-                           isPlaying: Bool, recentlyPlayed: Bool, event: LiveActivity?) -> LiveActivity? {
+                           isPlaying: Bool, recentlyPlayed: Bool, event: LiveActivity?,
+                           eventIsStarting: Bool = false) -> LiveActivity? {
         if let transient { return transient }
+        // Otherwise music played all day, or a focus timer, would hide the countdown at
+        // exactly the moment it's for.
+        if let event, eventIsStarting { return event }
         if timerRunning { return .timer }
         // A playing track keeps the wings; the event countdown waits until it pauses or stops.
         if hasTrack, isPlaying { return .music }
@@ -95,6 +105,14 @@ final class NotchViewModel {
         // notch indefinitely.
         if hasTrack, recentlyPlayed { return .music }
         return nil
+    }
+
+    /// Clears a finished timer's "Done" once the user has come to the notch (it stays
+    /// up to a minute otherwise, in case they were away).
+    func acknowledgeTimerDone() {
+        guard transient == .timerDone else { return }
+        transientTask?.cancel()
+        transient = nil
     }
 
     /// Shows an activity for a few seconds, then falls back to whatever is ongoing.

@@ -99,6 +99,8 @@ struct CalendarCard: View {
     @ViewBuilder
     private var agenda: some View {
         let items = calendar.events(on: selectedDay)
+        let allDay = items.filter(\.isAllDay)
+        let timed = items.filter { !$0.isAllDay }
         if items.isEmpty {
             Text(isTodaySelected ? "Nothing on today" : "No events")
                 .font(.system(size: 12))
@@ -110,7 +112,10 @@ struct CalendarCard: View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
-                        ForEach(items) { item in
+                        if !allDay.isEmpty {
+                            AllDayLine(items: allDay)
+                        }
+                        ForEach(timed) { item in
                             EventRow(item: item, day: selectedDay, now: calendar.now, isToday: isTodaySelected)
                                 .id(item.id)
                         }
@@ -137,8 +142,8 @@ struct CalendarCard: View {
                 .onAppear {
                     // Today opens at the next event rather than ones already over.
                     guard isTodaySelected,
-                          let next = items.first(where: { !$0.isAllDay && !$0.hasEnded(at: calendar.now) }),
-                          next.id != items.first?.id
+                          let next = timed.first(where: { !$0.hasEnded(at: calendar.now) }),
+                          next.id != timed.first?.id
                     else { return }
                     proxy.scrollTo(next.id, anchor: .top)
                 }
@@ -289,6 +294,48 @@ private struct DayCell: View {
     private var circleColor: Color {
         guard isSelected else { return .clear }
         return isToday ? Theme.today : Theme.primary
+    }
+}
+
+// MARK: - All-day line
+
+/// All-day events share one line above the timed ones, so a holiday or a birthday
+/// never pushes the next meeting out of view. The tooltip lists them all.
+private struct AllDayLine: View {
+    let items: [CalendarItem]
+
+    private var summary: String {
+        guard let first = items.first?.title else { return "" }
+        return items.count > 1 ? "\(first), +\(items.count - 1)" : first
+    }
+
+    var body: some View {
+        Button { items.first?.openInCalendar() } label: {
+            HStack(spacing: 8) {
+                VStack(spacing: 1.5) {
+                    ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { _, item in
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            .fill(item.color)
+                    }
+                }
+                .frame(width: 3, height: 14)
+                Text("All day")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.secondary)
+                Text(summary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, CalendarCard.inset)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .hoverHighlight(cornerRadius: 9)
+        .help(items.map(\.title).joined(separator: "\n"))
+        .accessibilityLabel("All day: " + items.map(\.title).joined(separator: ", "))
     }
 }
 

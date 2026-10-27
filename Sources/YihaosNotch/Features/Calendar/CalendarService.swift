@@ -30,6 +30,15 @@ struct CalendarItem: Identifiable, Equatable {
     }
 }
 
+/// One of the user's calendars, as listed in Settings.
+struct CalendarSource: Identifiable, Equatable {
+    let id: String
+    let title: String
+    /// The account it belongs to ("iCloud", "Work", "Other").
+    let account: String
+    let color: Color
+}
+
 /// Loads events for a window of days around today (a week either side) and keeps
 /// them current.
 @MainActor
@@ -46,6 +55,12 @@ final class CalendarService {
     /// Advances on each minute boundary, so countdowns and "now" stay accurate.
     private(set) var now = Date()
     private var eventsByDay: [Date: [CalendarItem]] = [:]
+    /// Every event calendar, for choosing which to show.
+    private(set) var calendars: [CalendarSource] = []
+    /// Calendars whose events are left out, by identifier.
+    @ObservationIgnored var hiddenCalendars: Set<String> = [] {
+        didSet { if hiddenCalendars != oldValue { refresh() } }
+    }
 
     @ObservationIgnored private let store = EKEventStore()
     @ObservationIgnored private var minuteTimer: Timer?
@@ -104,6 +119,7 @@ final class CalendarService {
         observers.forEach { $0.center.removeObserver($0.token) }
         observers.removeAll()
         eventsByDay = [:]
+        calendars = []
         meetingCache = [:]
     }
 
@@ -155,10 +171,20 @@ final class CalendarService {
         }
         if previousAccess != .granted { store.reset() }
 
-        let predicate = store.predicateForEvents(withStart: rangeStart, end: rangeEnd, calendars: nil)
+        let allCalendars = store.calendars(for: .event)
+        let sources = allCalendars
+            .map { CalendarSource(id: $0.calendarIdentifier, title: $0.title, account: $0.source?.title ?? "Other",
+                                  color: Color(nsColor: $0.color)) }
+            .sorted { ($0.account, $0.title) < ($1.account, $1.title) }
+        if sources != calendars { calendars = sources }
+        let shown = allCalendars.filter { !hiddenCalendars.contains($0.calendarIdentifier) }
+
         var buckets: [Date: [CalendarItem]] = [:]
         var seenMeetingKeys = Set<String>()
-        for event in store.events(matching: predicate) where event.status != .canceled && !Self.isDeclined(event) {
+        // An empty list would mean "every calendar" to EventKit.
+        let events = shown.isEmpty ? [] : store.events(matching: store.predicateForEvents(
+            withStart: rangeStart, end: rangeEnd, calendars: shown))
+        for event in events where event.status != .canceled && !Self.isDeclined(event) {
             let item = item(from: event, seenMeetingKeys: &seenMeetingKeys)
             // Multi-day events appear on every day they touch.
             var day = max(calendar.startOfDay(for: event.startDate), rangeStart)

@@ -342,6 +342,7 @@ final class NotchController {
     }
 
     private func arm() {
+        viewModel.acknowledgeTimerDone()
         viewModel.state = .arming
         startPointerTracking()
         guard settings.openTrigger == .hover else { return }
@@ -369,8 +370,11 @@ final class NotchController {
         closeTask?.cancel()
         closeTask = nil
         guard viewModel.state != .open, screenFrame != .zero else { return }
+        // Opening from the timer's wings lands on the timer; otherwise on the calendar.
+        let fromTimer = viewModel.activity == .timer
+        viewModel.acknowledgeTimerDone()
         viewModel.showingCamera = false
-        viewModel.showingTimer = false
+        viewModel.showingTimer = fromTimer
         viewModel.state = .open
         panel?.ignoresMouseEvents = false
         if settings.hapticsEnabled {

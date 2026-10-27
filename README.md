@@ -5,7 +5,8 @@ stays a plain black notch until it has something to say, and opens into a small 
 when you want it.
 
 **Closed**, the notch grows small "wings" either side for whatever matters right now:
-the album art and bars of what's playing, a countdown before your next event, a
+the album art and bars of what's playing, a countdown before your next event (which
+takes over from music or a timer for the minute before it starts and two after), a
 running timer, the charger connecting (charging or just plugged in, and the charger's
 wattage), or your AirPods switching on.
 
@@ -15,10 +16,12 @@ fingers), it shows:
 - **Now Playing** for Music and Spotify: artwork, controls, a scrubber and a synced
   lyric line.
 - **Calendar**: a five-day strip you can scroll a week either way, and the agenda for
-  the chosen day. Clicking an event shows it in Calendar; Zoom, Teams, Meet and Webex
-  links get a Join button (until the event ends) that opens the meeting straight in
-  its app.
-- **Timer**: click the clock in the header.
+  the chosen day, with all-day events on one line at the top. Clicking an event shows
+  it in Calendar; Zoom, Teams, Meet and Webex links get a Join button (until the event
+  ends) that opens the meeting straight in its app. Settings chooses which calendars
+  are shown.
+- **Timer**: click the clock in the header, or the timer's wings while it runs. A
+  finished timer stays in the notch until you next come to it (up to a minute).
 - **Camera mirror**: a quick check before a call, with Center Stage (keeps you framed as
   you move) on cameras that have it, such as recent MacBooks' 12 MP camera, toggled from a
   button in the mirror.
@@ -48,13 +51,13 @@ can be skipped; a skipped one is asked for when its feature is first used.
 | Calendars | Showing your events and meeting links. Read-only. |
 | Camera | The mirror. The camera runs only while the mirror is on screen. |
 | Automation (Music, Spotify) | Reading what's playing and controlling playback. |
-| Accessibility | Only for the optional volume/brightness indicator, which needs to catch those keys before macOS does. Off by default. A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. |
+| Accessibility | Only for the optional volume/brightness indicator, which needs to catch those keys before macOS does. Off by default. A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on, and only while an external keyboard is connected, the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. Settings says so too. |
 
 ## Privacy
 
 Nothing leaves your Mac except lyrics lookups: the title, artist, album and length of
 the current track are sent to [LRCLIB](https://lrclib.net), a free lyrics database.
-There are no analytics.
+Turning off Synced lyrics in Settings stops that too. There are no analytics.
 
 Display brightness has no public API, so it's set through Apple's private
 DisplayServices framework (as MonitorControl and similar tools do). If that ever stops

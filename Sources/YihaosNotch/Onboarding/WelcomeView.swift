@@ -287,7 +287,7 @@ private struct PermissionsPage: View {
     private var musicDetail: String {
         permissions.music == .notRunning
             ? "What's playing, with controls. Asked the first time you play music."
-            : "What's playing, with controls and lyrics."
+            : "What's playing, with controls and lyrics (looked up on LRCLIB by track name; can be turned off in Settings)."
     }
 
     /// A switch, so it can be turned off again here; while it's on but Accessibility

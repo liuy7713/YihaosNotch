@@ -39,7 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             viewModel?.flash(.headphones(name: name, symbol: symbol), seconds: 3)
         }
         timer.onFinish = { [viewModel] in
-            viewModel?.flash(.timerDone, seconds: 6)
+            // Up to a minute, or until the pointer reaches the notch: the user may have
+            // stepped away while it ran.
+            viewModel?.flash(.timerDone, seconds: 60)
         }
 
         let root = NotchRootView()
@@ -63,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = Self.makeMainMenu()
         mediaKeys.canShowHUD = { [weak controller] in controller?.canShowLiveActivity ?? false }
 
+        follow { [settings, nowPlaying] in nowPlaying.lyricsEnabled = settings.showLyrics }
+        follow { [settings, calendar] in calendar.hiddenCalendars = settings.hiddenCalendars }
+
         // Until the welcome screen is done, nothing that would raise a permission prompt
         // runs: it asks for each one itself, with a reason. (Reading the players sends
         // them Apple events, which prompts.)
@@ -81,6 +86,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Development aid: `--preview-settings` opens Settings at launch.
         if CommandLine.arguments.contains("--preview-settings") { SettingsWindowController.shared.show() }
         runPreviewFlags()
+    }
+
+    /// Runs `apply` now and again whenever a setting it reads changes, so services
+    /// follow Settings without the views having to tell them.
+    private func follow(_ apply: @escaping @MainActor () -> Void) {
+        withObservationTracking(apply) { [weak self] in
+            Task { @MainActor in self?.follow(apply) }
+        }
     }
 
     private func welcomeFinished() {

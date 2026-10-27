@@ -70,7 +70,7 @@ struct OpenPanelView: View {
             Color.clear.frame(width: model.notchSize.width + 16)
 
             HStack(spacing: 4) {
-                HeaderIconButton(systemName: "video.fill", label: "Camera mirror", active: model.showingCamera) {
+                HeaderIconButton(systemName: "web.camera.fill", label: "Camera mirror", active: model.showingCamera) {
                     model.showingCamera.toggle()
                     model.showingTimer = false
                 }

@@ -28,6 +28,7 @@ final class MediaKeyController {
     @ObservationIgnored private var tap: CFMachPort?
     @ObservationIgnored private var source: CFRunLoopSource?
     @ObservationIgnored private var brightnessTap: BrightnessKeyTap?
+    @ObservationIgnored private let externalKeyboards = ExternalKeyboards()
     @ObservationIgnored private var permissionPoll: Task<Void, Never>?
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
     /// Keys whose key-down was swallowed; only their key-ups are swallowed, so macOS
@@ -122,7 +123,23 @@ final class MediaKeyController {
         self.source = source
         isRunning = true
 
-        // A Magic Keyboard's brightness keys arrive as key presses instead.
+        // A Magic Keyboard's brightness keys arrive as key presses instead, so while
+        // an external keyboard is connected a second tap watches for those.
+        externalKeyboards.onChange = { [weak self] _ in self?.updateBrightnessTap() }
+        externalKeyboards.start()
+        updateBrightnessTap()
+    }
+
+    /// The tap that sees every key press runs only while it's needed: the media-key
+    /// tap is on and an external keyboard is connected.
+    private func updateBrightnessTap() {
+        guard isRunning, externalKeyboards.isConnected else {
+            if brightnessTap != nil { log.info("brightness key tap stopped") }
+            brightnessTap?.stop()
+            brightnessTap = nil
+            return
+        }
+        guard brightnessTap == nil else { return }
         let brightnessKeys = BrightnessKeyTap { [weak self] up, isDown, isRepeat, modifiers in
             DispatchQueue.main.sync {
                 MainActor.assumeIsolated {
@@ -133,6 +150,7 @@ final class MediaKeyController {
         }
         if brightnessKeys.start() {
             brightnessTap = brightnessKeys
+            log.info("brightness key tap started (external keyboard connected)")
         } else {
             log.error("brightness key tap could not be created")
         }
@@ -144,10 +162,10 @@ final class MediaKeyController {
         if let tap { CFMachPortInvalidate(tap) }
         tap = nil
         source = nil
-        brightnessTap?.stop()
-        brightnessTap = nil
-        swallowedDowns.removeAll()
         isRunning = false
+        externalKeyboards.stop()
+        updateBrightnessTap()
+        swallowedDowns.removeAll()
     }
 
     // MARK: Key handling
