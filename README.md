@@ -18,7 +18,8 @@ fingers), it shows:
   the chosen day. Zoom, Teams, Meet and Webex links get a Join button that opens the
   meeting straight in its app.
 - **Timer**: click the clock in the header.
-- **Camera mirror**: a quick check before a call.
+- **Camera mirror**: a quick check before a call, with Center Stage (keeps you framed as
+  you move) on cameras that support it, toggled from a button in the mirror.
 
 Optionally, the volume and brightness keys show a small indicator in the notch instead
 of the macOS pop-up.

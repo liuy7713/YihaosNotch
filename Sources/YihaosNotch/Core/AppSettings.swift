@@ -44,6 +44,10 @@ final class AppSettings {
     var eventReminderMinutes: Int {
         didSet { defaults.set(eventReminderMinutes, forKey: Key.eventReminder) }
     }
+    /// Center Stage in the camera mirror, when the camera supports it.
+    var cameraCenterStage: Bool {
+        didSet { defaults.set(cameraCenterStage, forKey: Key.centerStage) }
+    }
     /// The version of the welcome screen last finished. It shows at launch while this is
     /// behind `Self.welcomeVersion`; raise that when the welcome gains something worth
     /// seeing again.
@@ -68,6 +72,7 @@ final class AppSettings {
             Key.systemHUD: false,
             Key.headphones: true,
             Key.welcome: 0,
+            Key.centerStage: true,
         ])
         openTrigger = OpenTrigger(rawValue: d.string(forKey: Key.openTrigger) ?? "") ?? .hover
         hoverDelay = d.double(forKey: Key.hoverDelay)
@@ -79,6 +84,7 @@ final class AppSettings {
         replaceSystemHUD = d.bool(forKey: Key.systemHUD)
         showHeadphonesActivity = d.bool(forKey: Key.headphones)
         welcomeCompleted = d.integer(forKey: Key.welcome)
+        cameraCenterStage = d.bool(forKey: Key.centerStage)
     }
 
     private enum Key {
@@ -92,5 +98,6 @@ final class AppSettings {
         static let systemHUD = "replaceSystemHUD"
         static let headphones = "showHeadphonesActivity"
         static let welcome = "welcomeCompleted"
+        static let centerStage = "cameraCenterStage"
     }
 }

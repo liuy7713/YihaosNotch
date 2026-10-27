@@ -23,6 +23,12 @@ struct CameraMirrorView: View {
                     .scaleEffect(x: -1, y: 1)
                     .clipShape(shape)
                     .opacity(camera.isLive ? 1 : 0)
+                if camera.isLive, camera.supportsCenterStage {
+                    CenterStageButton()
+                        .padding(8)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .transition(.opacity)
+                }
             case .notDetermined:
                 ProgressView()
                     .controlSize(.small)
@@ -42,6 +48,30 @@ struct CameraMirrorView: View {
         .animation(.easeOut(duration: 0.35), value: camera.isLive)
         .onAppear { camera.activate() }
         .onDisappear { camera.deactivate() }
+    }
+}
+
+/// Turns Center Stage on and off, like FaceTime's button. Lit while it's framing you.
+private struct CenterStageButton: View {
+    @Environment(CameraController.self) private var camera
+
+    var body: some View {
+        let on = camera.isCenterStageActive
+        Button {
+            camera.setCenterStage(!on)
+        } label: {
+            Image(systemName: "person.fill.viewfinder")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(on ? Color.black : Theme.primary)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(on ? Theme.primary : Color.black.opacity(0.55)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(PressableStyle())
+        .animation(.easeOut(duration: 0.2), value: on)
+        .help(on ? "Center Stage is on: it keeps you in frame" : "Center Stage")
+        .accessibilityLabel("Center Stage")
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
