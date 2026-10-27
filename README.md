@@ -145,6 +145,7 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--preview-swap` | Flips the right column between calendar and timer every 2 s. |
 | `--simulate-notch WxH` | Lays out as if the notch were W×H points, to check other models and display scalings (a 14" ranges from about 140×24 to 225×38). |
 | `--music-idle-seconds N` | Paused music leaves the closed notch after N seconds instead of 120. |
+| `--preview-settings` | Opens Settings at launch. |
 | `--preview-welcome N` | Shows the welcome screen at page N (0–2), even if it has been finished. |
 | `--preview-hud` | Cycles the volume, brightness, headphone and charging indicators (charging shows the real power state). The real volume and brightness are untouched. |
 

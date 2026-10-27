@@ -71,6 +71,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if welcoming || CommandLine.arguments.contains("--preview-welcome") {
             WelcomeWindowController.shared.show()
         }
+        // Development aid: `--preview-settings` opens Settings at launch.
+        if CommandLine.arguments.contains("--preview-settings") { SettingsWindowController.shared.show() }
         runPreviewFlags()
     }
 
