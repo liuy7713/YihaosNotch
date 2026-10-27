@@ -77,6 +77,11 @@ struct OpenPanelView: View {
                 HeaderIconButton(systemName: "gearshape.fill", label: "Settings") {
                     SettingsWindowController.shared.show()
                 }
+                // A home for Quit that doesn't need a window; adds nothing to the panel.
+                .contextMenu {
+                    Button("Settings…") { SettingsWindowController.shared.show() }
+                    Button("Quit Yihao's Notch") { NSApp.terminate(nil) }
+                }
                 batteryIndicator
                     .padding(.leading, 6)
             }

@@ -28,7 +28,7 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
             let permissions = WelcomePermissions(firstRun: settings?.needsWelcome ?? true)
             let hosting = NSHostingController(rootView: makeView(page, permissions) { [weak self] in self?.window?.close() })
             hosting.sizingOptions = [.preferredContentSize]
-            let window = NSWindow(contentViewController: hosting)
+            let window = EscapeClosingWindow(contentViewController: hosting)
             window.title = "Welcome to Yihao's Notch"
             window.styleMask = [.titled, .closable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true

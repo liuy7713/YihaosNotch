@@ -54,6 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         controller.start()
         self.controller = controller
+        SettingsWindowController.shared.onShow = { [weak controller] in controller?.dismissPanel() }
+        NSApp.mainMenu = Self.makeMainMenu()
         mediaKeys.canShowHUD = { [weak controller] in controller?.canShowLiveActivity ?? false }
 
         // Until the welcome screen is done, nothing that would raise a permission prompt
@@ -125,6 +127,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    /// Never shown (the app has no menu bar), but it gives the app's windows the
+    /// standard keys: ⌘, for Settings, ⌘W to close, ⌘Q to quit, and editing.
+    private static func makeMainMenu() -> NSMenu {
+        func menu(_ title: String, _ items: [NSMenuItem]) -> NSMenuItem {
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            let submenu = NSMenu(title: title)
+            items.forEach(submenu.addItem)
+            item.submenu = submenu
+            return item
+        }
+        let main = NSMenu()
+        main.addItem(menu("Yihao's Notch", [
+            NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","),
+            .separator(),
+            NSMenuItem(title: "Quit Yihao's Notch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
+        ]))
+        main.addItem(menu("Edit", [
+            NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"),
+            NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"),
+            NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"),
+            NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"),
+        ]))
+        main.addItem(menu("Window", [
+            NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"),
+        ]))
+        return main
+    }
+
+    @objc private func showSettings() {
+        SettingsWindowController.shared.show()
     }
 
     // Opening the app again (e.g. from Finder or Spotlight) shows Settings, or the

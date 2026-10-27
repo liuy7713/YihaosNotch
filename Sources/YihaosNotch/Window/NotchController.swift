@@ -278,6 +278,14 @@ final class NotchController {
         if event.phase == .ended || event.phase == .cancelled { swipeDistance = 0 }
     }
 
+    /// Folds the panel away (Settings is opening beneath it). The pointer may still be
+    /// near the notch, so it isn't allowed to reopen it straight away.
+    func dismissPanel() {
+        guard viewModel.state == .open else { return }
+        armSuppressedUntil = .now + 1
+        close()
+    }
+
     /// Opens the panel for a few seconds wherever the pointer is, so someone who has
     /// just finished the welcome screen sees where the app lives.
     func greet() {
