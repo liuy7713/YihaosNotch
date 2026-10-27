@@ -7,10 +7,10 @@ import Testing
 struct PriorityTests {
     let event = LiveActivity.event(title: "Standup", start: Date(timeIntervalSince1970: 0), color: .blue)
 
-    func pick(transient: LiveActivity? = nil, timer: Bool = false, track: Bool = false,
+    func pick(transient: LiveActivity? = nil, done: Bool = false, timer: Bool = false, track: Bool = false,
               playing: Bool = false, recent: Bool = false, event: LiveActivity? = nil,
               starting: Bool = false) -> LiveActivity? {
-        NotchViewModel.prioritise(transient: transient, timerRunning: timer, hasTrack: track,
+        NotchViewModel.prioritise(transient: transient, timerDone: done, timerRunning: timer, hasTrack: track,
                                   isPlaying: playing, recentlyPlayed: recent, event: event,
                                   eventIsStarting: starting)
     }
@@ -49,6 +49,12 @@ struct PriorityTests {
     @Test(arguments: [(61.0, false), (60, true), (0, true), (-120, true), (-121, false)])
     func theStartingWindow(_ secondsUntilStart: TimeInterval, _ inside: Bool) {
         #expect(NotchViewModel.startingWindow.contains(secondsUntilStart) == inside)
+    }
+
+    @Test func aFinishedTimerWaitsOutAFlashAndBeatsTheRest() {
+        let volume = LiveActivity.volume(level: 0.5, muted: false)
+        #expect(pick(transient: volume, done: true) == volume)
+        #expect(pick(done: true, track: true, playing: true, event: event, starting: true) == .timerDone)
     }
 
     @Test func nothingToShow() {

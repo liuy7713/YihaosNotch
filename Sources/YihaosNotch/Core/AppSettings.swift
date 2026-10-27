@@ -44,7 +44,7 @@ final class AppSettings {
     var eventReminderMinutes: Int {
         didSet { defaults.set(eventReminderMinutes, forKey: Key.eventReminder) }
     }
-    /// Synced lyrics in the panel, looked up on LRCLIB (the app's only network use).
+    /// Synced lyrics in the panel, looked up on LRCLIB.
     var showLyrics: Bool {
         didSet { defaults.set(showLyrics, forKey: Key.lyrics) }
     }

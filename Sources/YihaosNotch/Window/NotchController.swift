@@ -174,7 +174,7 @@ final class NotchController {
             let p = NotchGesturePanel(
                 onCrossing: { [weak self] in self?.pointerMoved() },
                 onScroll: { [weak self] event in self?.scrolled(event) },
-                onClick: { [weak self] in self?.open() }
+                onClick: { [weak self] in self?.openFromClick() }
             )
             self.gesturePanel = p
             return p
@@ -365,16 +365,20 @@ final class NotchController {
         stopPointerTracking()
     }
 
-    private func open() {
+    /// A click on the timer's wings opens on the timer; any other way in (hovering,
+    /// swiping) opens on the calendar, so a long focus timer doesn't hide the agenda.
+    private func openFromClick() {
+        open(showingTimer: viewModel.activity == .timer)
+    }
+
+    private func open(showingTimer: Bool = false) {
         armTask?.cancel()
         closeTask?.cancel()
         closeTask = nil
         guard viewModel.state != .open, screenFrame != .zero else { return }
-        // Opening from the timer's wings lands on the timer; otherwise on the calendar.
-        let fromTimer = viewModel.activity == .timer
         viewModel.acknowledgeTimerDone()
         viewModel.showingCamera = false
-        viewModel.showingTimer = fromTimer
+        viewModel.showingTimer = showingTimer
         viewModel.state = .open
         panel?.ignoresMouseEvents = false
         if settings.hapticsEnabled {

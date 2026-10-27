@@ -38,11 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard settings.showHeadphonesActivity else { return }
             viewModel?.flash(.headphones(name: name, symbol: symbol), seconds: 3)
         }
-        timer.onFinish = { [viewModel] in
-            // Up to a minute, or until the pointer reaches the notch: the user may have
-            // stepped away while it ran.
-            viewModel?.flash(.timerDone, seconds: 60)
-        }
+        timer.onFinish = { [viewModel] in viewModel?.showTimerDone() }
 
         let root = NotchRootView()
             .environment(viewModel)
@@ -65,8 +61,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = Self.makeMainMenu()
         mediaKeys.canShowHUD = { [weak controller] in controller?.canShowLiveActivity ?? false }
 
-        follow { [settings, nowPlaying] in nowPlaying.lyricsEnabled = settings.showLyrics }
-        follow { [settings, calendar] in calendar.hiddenCalendars = settings.hiddenCalendars }
+        follow({ [settings] in settings.showLyrics }) { [nowPlaying] in nowPlaying.lyricsEnabled = $0 }
+        follow({ [settings] in settings.hiddenCalendars }) { [calendar] in calendar.hiddenCalendars = $0 }
 
         // Until the welcome screen is done, nothing that would raise a permission prompt
         // runs: it asks for each one itself, with a reason. (Reading the players sends
@@ -88,12 +84,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         runPreviewFlags()
     }
 
-    /// Runs `apply` now and again whenever a setting it reads changes, so services
-    /// follow Settings without the views having to tell them.
-    private func follow(_ apply: @escaping @MainActor () -> Void) {
-        withObservationTracking(apply) { [weak self] in
-            Task { @MainActor in self?.follow(apply) }
+    /// Hands the setting `read` returns to `apply` now and whenever it changes, so
+    /// services follow Settings without the views having to tell them. Only `read` is
+    /// tracked: whatever `apply` touches doesn't trigger another pass.
+    private func follow<Value>(_ read: @escaping @MainActor () -> Value,
+                               _ apply: @escaping @MainActor (Value) -> Void) {
+        let value = withObservationTracking(read) { [weak self] in
+            Task { @MainActor in self?.follow(read, apply) }
         }
+        apply(value)
     }
 
     private func welcomeFinished() {

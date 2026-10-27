@@ -20,8 +20,8 @@ fingers), it shows:
   it in Calendar; Zoom, Teams, Meet and Webex links get a Join button (until the event
   ends) that opens the meeting straight in its app. Settings chooses which calendars
   are shown.
-- **Timer**: click the clock in the header, or the timer's wings while it runs. A
-  finished timer stays in the notch until you next come to it (up to a minute).
+- **Timer**: click the clock in the header, or click the timer's wings while it runs.
+  A finished timer stays in the notch until you next come to it (up to a minute).
 - **Camera mirror**: a quick check before a call, with Center Stage (keeps you framed as
   you move) on cameras that have it, such as recent MacBooks' 12 MP camera, toggled from a
   button in the mirror.
@@ -51,13 +51,15 @@ can be skipped; a skipped one is asked for when its feature is first used.
 | Calendars | Showing your events and meeting links. Read-only. |
 | Camera | The mirror. The camera runs only while the mirror is on screen. |
 | Automation (Music, Spotify) | Reading what's playing and controlling playback. |
-| Accessibility | Only for the optional volume/brightness indicator, which needs to catch those keys before macOS does. Off by default. A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on, and only while an external keyboard is connected, the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. Settings says so too. |
+| Accessibility | Only for the optional volume/brightness indicator, which needs to catch those keys before macOS does. Off by default. A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on, and only while an external keyboard is connected (anything that presents itself as one counts, such as some mouse receivers, security keys or Karabiner's virtual keyboard), the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. Settings says so too. |
 
 ## Privacy
 
-Nothing leaves your Mac except lyrics lookups: the title, artist, album and length of
-the current track are sent to [LRCLIB](https://lrclib.net), a free lyrics database.
-Turning off Synced lyrics in Settings stops that too. There are no analytics.
+Only two things go over the network. Lyrics lookups send the title, artist, album and
+length of the current track to [LRCLIB](https://lrclib.net), a free lyrics database;
+turning off Synced lyrics in Settings stops them. And when Spotify is playing, its
+album art is downloaded from Spotify's own image servers (the address Spotify reports).
+There are no analytics.
 
 Display brightness has no public API, so it's set through Apple's private
 DisplayServices framework (as MonitorControl and similar tools do). If that ever stops

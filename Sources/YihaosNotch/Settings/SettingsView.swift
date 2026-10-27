@@ -198,19 +198,21 @@ private struct CalendarPicker: View {
     let calendars: [CalendarSource]
     @Binding var hidden: Set<String>
 
+    /// Account identifiers in list order.
     private var accounts: [String] {
-        calendars.map(\.account).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+        calendars.map(\.accountID).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(accounts, id: \.self) { account in
+                    let members = calendars.filter { $0.accountID == account }
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(account)
+                        Text(members.first?.account ?? "")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Theme.tertiary)
-                        ForEach(calendars.filter { $0.account == account }) { source in
+                        ForEach(members) { source in
                             Toggle(isOn: shown(source.id)) {
                                 HStack(spacing: 6) {
                                     Circle().fill(source.color).frame(width: 8, height: 8)

@@ -96,13 +96,18 @@ struct CalendarCard: View {
 
     // MARK: Agenda
 
+    private var allCalendarsHidden: Bool {
+        !calendar.calendars.isEmpty && calendar.calendars.allSatisfy { settings.hiddenCalendars.contains($0.id) }
+    }
+
     @ViewBuilder
     private var agenda: some View {
         let items = calendar.events(on: selectedDay)
         let allDay = items.filter(\.isAllDay)
         let timed = items.filter { !$0.isAllDay }
         if items.isEmpty {
-            Text(isTodaySelected ? "Nothing on today" : "No events")
+            Text(allCalendarsHidden ? "All calendars are hidden in Settings"
+                 : isTodaySelected ? "Nothing on today" : "No events")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.tertiary)
                 .padding(.leading, Self.inset)

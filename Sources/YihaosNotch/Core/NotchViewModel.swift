@@ -50,6 +50,10 @@ final class NotchViewModel {
 
     private(set) var transient: LiveActivity?
     @ObservationIgnored private var transientTask: Task<Void, Never>?
+    /// A finished timer. Kept apart from `transient` so a volume or charger flash
+    /// meanwhile doesn't wipe it; it shows again once the flash is over.
+    private(set) var timerDone = false
+    @ObservationIgnored private var timerDoneTask: Task<Void, Never>?
 
     private let settings: AppSettings
     private let nowPlaying: NowPlayingService
@@ -76,6 +80,7 @@ final class NotchViewModel {
             eventIsStarting = Self.startingWindow.contains(item.start.timeIntervalSince(calendar.now))
         }
         return Self.prioritise(transient: transient,
+                               timerDone: timerDone,
                                timerRunning: timer.isActive,
                                hasTrack: settings.showMusicActivity && nowPlaying.track != nil,
                                isPlaying: nowPlaying.isPlaying,
@@ -89,10 +94,11 @@ final class NotchViewModel {
     static let startingWindow: ClosedRange<TimeInterval> = -120...60
 
     /// The priority rules on their own, so they can be checked without live services.
-    static func prioritise(transient: LiveActivity?, timerRunning: Bool, hasTrack: Bool,
+    static func prioritise(transient: LiveActivity?, timerDone: Bool = false, timerRunning: Bool, hasTrack: Bool,
                            isPlaying: Bool, recentlyPlayed: Bool, event: LiveActivity?,
                            eventIsStarting: Bool = false) -> LiveActivity? {
         if let transient { return transient }
+        if timerDone { return .timerDone }
         // Otherwise music played all day, or a focus timer, would hide the countdown at
         // exactly the moment it's for.
         if let event, eventIsStarting { return event }
@@ -107,12 +113,22 @@ final class NotchViewModel {
         return nil
     }
 
-    /// Clears a finished timer's "Done" once the user has come to the notch (it stays
-    /// up to a minute otherwise, in case they were away).
+    /// Shows a finished timer's "Done" until the user comes to the notch, or for a
+    /// minute, in case they were away.
+    func showTimerDone() {
+        timerDone = true
+        timerDoneTask?.cancel()
+        timerDoneTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(60))
+            guard !Task.isCancelled else { return }
+            self?.timerDone = false
+        }
+    }
+
     func acknowledgeTimerDone() {
-        guard transient == .timerDone else { return }
-        transientTask?.cancel()
-        transient = nil
+        guard timerDone else { return }
+        timerDoneTask?.cancel()
+        timerDone = false
     }
 
     /// Shows an activity for a few seconds, then falls back to whatever is ongoing.

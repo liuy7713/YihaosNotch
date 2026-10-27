@@ -34,8 +34,10 @@ struct CalendarItem: Identifiable, Equatable {
 struct CalendarSource: Identifiable, Equatable {
     let id: String
     let title: String
-    /// The account it belongs to ("iCloud", "Work", "Other").
+    /// The account it belongs to ("iCloud", "Work", "Other"), and that account's
+    /// identifier (two accounts can share a name).
     let account: String
+    let accountID: String
     let color: Color
 }
 
@@ -98,12 +100,19 @@ final class CalendarService {
                 MainActor.assumeIsolated { self.refresh() }
             }))
         }
+        // Timers don't count sleep, and a clock change moves the minute boundary: either
+        // way the next tick would come late, and countdowns with it.
+        let realign: @Sendable (Notification) -> Void = { _ in
+            MainActor.assumeIsolated {
+                self.tick()
+                self.scheduleMinuteTick()
+            }
+        }
+        observers.append((center, center.addObserver(forName: .NSSystemClockDidChange, object: nil, queue: .main,
+                                                      using: realign)))
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append((workspace, workspace.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { _ in
-            MainActor.assumeIsolated { self.tick() }
-        }))
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: realign)))
         scheduleMinuteTick()
 
         if access == .notDetermined, requestingAccess { requestAccess() } else { refresh() }
@@ -174,7 +183,7 @@ final class CalendarService {
         let allCalendars = store.calendars(for: .event)
         let sources = allCalendars
             .map { CalendarSource(id: $0.calendarIdentifier, title: $0.title, account: $0.source?.title ?? "Other",
-                                  color: Color(nsColor: $0.color)) }
+                                  accountID: $0.source?.sourceIdentifier ?? "", color: Color(nsColor: $0.color)) }
             .sorted { ($0.account, $0.title) < ($1.account, $1.title) }
         if sources != calendars { calendars = sources }
         let shown = allCalendars.filter { !hiddenCalendars.contains($0.calendarIdentifier) }
