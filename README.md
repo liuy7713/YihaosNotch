@@ -21,9 +21,9 @@ fingers), it shows:
   ends) that opens the meeting straight in its app. Settings chooses which calendars
   are shown.
 - **Timer**: click the clock in the header, or click the timer's wings while it runs.
-  Seven presets and a custom tile: scroll on it to pick from 1 minute to 3 hours
-  (minutes to 20, then fives to an hour, then 75, 90, 120, 150, 180), click to start;
-  it keeps its value. Past an hour the wings show "1h 30". A finished timer stays in
+  Seven presets and a custom tile (marked ↕): scroll on it to pick from 1 to 180
+  minutes, one stop per scroll tick (single minutes to 10, fives to an hour, then
+  quarter hours), and click to start; it keeps its value. Past an hour the wings show "1h 30". A finished timer stays in
   the notch until you next come to it (up to a minute).
 - **Camera mirror**: a quick check before a call, with Center Stage (keeps you framed as
   you move) on cameras that have it, such as recent MacBooks' 12 MP camera, toggled from a

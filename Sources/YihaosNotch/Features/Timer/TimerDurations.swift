@@ -1,11 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// The lengths the custom timer tile moves through: every minute to 20, every five to
-/// an hour, then a few long ones. Fixed stops rather than acceleration, so the same
-/// gesture always lands on the same value.
+/// The lengths the custom timer tile moves through: single minutes to 10, fives to an
+/// hour, then quarter hours to three. The step only changes where people switch units
+/// anyway, and fixed stops (rather than acceleration) mean the same gesture always
+/// lands on the same value.
 enum TimerDurations {
-    static let stops: [Int] = Array(1...20) + Array(stride(from: 25, through: 60, by: 5)) + [75, 90, 120, 150, 180]
+    static let stops: [Int] = Array(1...10) + Array(stride(from: 15, through: 60, by: 5))
+        + Array(stride(from: 75, through: 180, by: 15))
 
     static let defaultCustom = 60
 
@@ -23,29 +25,26 @@ enum TimerDurations {
         }
         return stops[min(max(index, 0), stops.count - 1)]
     }
-
-    /// The custom tile's number: minutes below an hour, then "1h 15", "2h".
-    static func label(_ minutes: Int) -> String {
-        guard minutes >= 60 else { return "\(minutes)" }
-        let hours = minutes / 60, rest = minutes % 60
-        return rest == 0 ? "\(hours)h" : "\(hours)h \(rest)"
-    }
 }
 
-/// Turns scroll-wheel and trackpad movement into whole steps. Pure, so it can be tested.
+/// Turns scroll-wheel and trackpad movement into single steps, like a picker wheel:
+/// one stop per wheel notch or per stretch of trackpad travel, never several at once,
+/// so every stop can be felt and seen. Pure, so it can be tested.
 struct ScrollStepper {
     enum Phase { case began, changed, ended, momentum, none }
 
-    /// Trackpad travel per step. macOS already accelerates precise deltas, so slow
-    /// movement gives single steps and a quick swipe several.
-    var pointsPerStep: Double = 14
-    /// A free-spinning wheel or a hard flick moves at most this far per event.
-    var maxStepsPerEvent = 5
+    /// Trackpad travel per stop. macOS accelerates quick swipes, so travel beyond one
+    /// stop per event is dropped rather than saved up.
+    var pointsPerStep: Double = 24
+    /// A speed limit (25 stops a second), so a hard flick or a free-spinning wheel
+    /// can't run through the whole scale.
+    var minimumInterval: TimeInterval = 0.04
     private(set) var accumulated: Double = 0
+    private var lastStep: TimeInterval = -.infinity
 
     /// `up` is travel with natural scrolling already undone: positive for fingers up or
-    /// the wheel rolled away. Returns the steps to take (negative for down).
-    mutating func steps(up: Double, precise: Bool, phase: Phase) -> Int {
+    /// the wheel rolled away. `time` is the event's timestamp. Returns 1, -1 or 0.
+    mutating func steps(up: Double, precise: Bool, phase: Phase, time: TimeInterval) -> Int {
         switch phase {
         // Momentum after the fingers lift would run past the value they chose.
         case .momentum: return 0
@@ -55,17 +54,21 @@ struct ScrollStepper {
             return 0
         case .changed, .none: break
         }
-        guard up.isFinite, up != 0 else { return 0 }
-        guard precise else {
-            // A notched wheel: one step per notch, a few more when spun fast.
-            let notches = min(max(Int(up.magnitude.rounded(.up)), 1), maxStepsPerEvent)
-            return up > 0 ? notches : -notches
+        guard up.isFinite, up != 0, time.isFinite else { return 0 }
+        let direction: Int
+        if precise {
+            // Reversing first undoes travel not yet turned into a stop.
+            accumulated = min(max(accumulated + up, -pointsPerStep), pointsPerStep)
+            guard abs(accumulated) >= pointsPerStep else { return 0 }
+            direction = accumulated > 0 ? 1 : -1
+        } else {
+            // A notched wheel: one stop per notch, however hard it's spun.
+            direction = up > 0 ? 1 : -1
         }
-        accumulated += up
-        let whole = Int((accumulated / pointsPerStep).rounded(.towardZero))
-        // The remainder carries over, so reversing direction first undoes it.
-        accumulated -= Double(whole) * pointsPerStep
-        return min(max(whole, -maxStepsPerEvent), maxStepsPerEvent)
+        guard time - lastStep >= minimumInterval else { return 0 }
+        lastStep = time
+        accumulated = 0
+        return direction
     }
 }
 
@@ -118,8 +121,9 @@ private struct ScrollStepsModifier: ViewModifier {
             let up = event.isDirectionInvertedFromDevice ? -deltaY : deltaY
             let precise = event.hasPreciseScrollingDeltas
             let phase = ScrollStepper.Phase(event)
+            let time = event.timestamp
             MainActor.assumeIsolated {
-                let steps = stepper.steps(up: up, precise: precise, phase: phase)
+                let steps = stepper.steps(up: up, precise: precise, phase: phase, time: time)
                 if steps != 0 { action(steps) }
             }
             return nil

@@ -4,13 +4,12 @@ import SwiftUI
 /// timer, or the running countdown with its controls.
 ///
 /// The last tile is the custom one: it starts whatever it shows, like the others, and
-/// scrolling on it changes that (see `TimerDurations.stops`). It keeps its value.
+/// scrolling on it changes that (see `TimerDurations.stops`). It keeps its value, and
+/// reads like the presets, always in minutes, marked only by a small ↕ after "min".
 struct TimerPanel: View {
     @Environment(TimerService.self) private var timer
     @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// When the last scroll tick played, so a quick swipe doesn't buzz.
-    @State private var lastTick = Date.distantPast
 
     private static let presets = [1, 3, 5, 10, 15, 25, 45]
 
@@ -35,7 +34,7 @@ struct TimerPanel: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
                 ForEach(Self.presets, id: \.self) { minutes in
                     Button { timer.start(minutes: minutes) } label: {
-                        tile(number: "\(minutes)", caption: "min")
+                        tile(minutes: minutes)
                     }
                     .buttonStyle(PressableStyle())
                     .accessibilityLabel("\(minutes) minute timer")
@@ -49,7 +48,7 @@ struct TimerPanel: View {
     private var customTile: some View {
         let minutes = settings.customTimerMinutes
         return Button { timer.start(minutes: minutes) } label: {
-            tile(number: TimerDurations.label(minutes), caption: "custom")
+            tile(minutes: minutes, adjustable: true)
         }
         .buttonStyle(PressableStyle())
         .onScrollSteps { steps in adjustCustom(by: steps, haptic: true) }
@@ -73,22 +72,29 @@ struct TimerPanel: View {
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) {
             settings.customTimerMinutes = new
         }
-        guard haptic, settings.hapticsEnabled, Date.now.timeIntervalSince(lastTick) > 0.03 else { return }
-        lastTick = .now
+        // Every stop ticks (the stepper already limits how fast they come).
+        guard haptic, settings.hapticsEnabled else { return }
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
 
-    private func tile(number: String, caption: String) -> some View {
+    private func tile(minutes: Int, adjustable: Bool = false) -> some View {
         VStack(spacing: 0) {
-            Text(number)
+            Text("\(minutes)")
                 .font(.system(size: 16, weight: .semibold, design: .rounded).monospacedDigit())
                 .foregroundStyle(Theme.primary)
                 .contentTransition(.numericText())
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Text(caption)
-                .font(.system(size: 9.5, weight: .medium))
-                .foregroundStyle(Theme.tertiary)
+            HStack(spacing: 2) {
+                Text("min")
+                    .font(.system(size: 9.5, weight: .medium))
+                if adjustable {
+                    // Arrows rather than chevrons, which are macOS's pop-up-menu sign:
+                    // a click here starts the timer.
+                    Image(systemName: "arrow.up.and.down")
+                        .font(.system(size: 7, weight: .semibold))
+                }
+            }
+            .foregroundStyle(Theme.tertiary)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 46)
