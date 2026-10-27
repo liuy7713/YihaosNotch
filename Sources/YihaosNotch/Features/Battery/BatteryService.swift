@@ -53,7 +53,9 @@ final class BatteryService {
         if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
     }
 
+    /// Call once; a second call would add a second run-loop source.
     func start() {
+        guard runLoopSource == nil else { return }
         update()
         let context = Unmanaged.passUnretained(self).toOpaque()
         guard let source = IOPSNotificationCreateRunLoopSource({ context in

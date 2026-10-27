@@ -105,7 +105,7 @@ enum SingleInstance {
         return Rank(installed: !WelcomePermissions.isDiskImagePath(url.path), build: known ?? build(at: url) ?? 0)
     }
 
-    private struct Rank: Comparable {
+    struct Rank: Comparable {
         let installed: Bool
         let build: Int
 

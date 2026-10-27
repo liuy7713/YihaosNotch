@@ -134,7 +134,7 @@ struct MeetingLink: Equatable, Sendable {
     /// Only `pwd`, `tk` (webinar registration) and `uname` are carried over.
     /// Vanity `/my/` and web-client `/wc/` links deliberately stay in the browser,
     /// since the app scheme has no reliable equivalent for them.
-    private var zoomAppURL: URL? {
+    var zoomAppURL: URL? {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let host = components.host
         else { return nil }
@@ -152,7 +152,7 @@ struct MeetingLink: Equatable, Sendable {
     }
 
     /// https://teams.microsoft.com/l/meetup-join/... → msteams:/l/meetup-join/...
-    private var teamsAppURL: URL? {
+    var teamsAppURL: URL? {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         var string = "msteams:" + components.percentEncodedPath
         if let query = components.percentEncodedQuery { string += "?" + query }

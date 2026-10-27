@@ -7,14 +7,17 @@
 #
 # The build number (CFBundleVersion) goes up by one every time, whatever the part:
 # macOS compares it to tell which of two copies is newer.
+#
+# Environment: PLIST names another Info.plist (the tests use a copy).
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
-PLIST="$ROOT/Resources/Info.plist"
+PLIST="${PLIST:-$ROOT/Resources/Info.plist}"
 PART="${1:?usage: bump-version.sh patch|minor|major}"
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$PLIST")"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$PLIST")"
+[[ "$BUILD" =~ '^[0-9]+$' ]] || { echo "error: unexpected build number \"$BUILD\"" >&2; exit 1; }
 [[ "$VERSION" =~ '^([0-9]+)\.([0-9]+)\.([0-9]+)$' ]] || { echo "error: unexpected version \"$VERSION\"" >&2; exit 1; }
 major=$match[1] minor=$match[2] patch=$match[3]
 

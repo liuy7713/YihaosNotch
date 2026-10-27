@@ -65,8 +65,10 @@ final class CalendarService {
     }
 
     /// `requestingAccess: false` leaves the permission prompt to the welcome screen, so
-    /// a new user isn't asked before they know what the app is.
-    func start(requestingAccess: Bool = true) {
+    /// a new user isn't asked before they know what the app is. Deliberately no
+    /// default: every caller decides whether the user is looking (prompts at launch,
+    /// often login, are what the welcome exists to avoid).
+    func start(requestingAccess: Bool) {
         guard !started else { return }
         started = true
         updateAccess()

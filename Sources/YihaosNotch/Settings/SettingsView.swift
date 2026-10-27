@@ -60,7 +60,8 @@ struct SettingsView: View {
             Section("Calendar") {
                 Toggle("Show calendar in the panel", isOn: $settings.calendarEnabled)
                     .onChange(of: settings.calendarEnabled) { _, enabled in
-                        if enabled { calendar.start() } else { calendar.stop() }
+                        // The user just switched it on, so asking now is in context.
+                        if enabled { calendar.start(requestingAccess: true) } else { calendar.stop() }
                     }
                 Picker("Countdown in the notch", selection: $settings.eventReminderMinutes) {
                     Text("Off").tag(0)

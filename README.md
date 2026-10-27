@@ -63,7 +63,7 @@ working, the brightness keys simply fall back to macOS.
 ## Build and run
 
 ```sh
-./scripts/make-signing-identity.sh   # once: a local signing identity (then back it up, below)
+./scripts/make-signing-identity.sh   # once: a local signing identity and its backup (below)
 ./scripts/build.sh                   # builds ~/Library/Caches/YihaosNotch/Yihao's Notch.app
 ./scripts/build.sh --install         # also installs to /Applications and launches it
 ```
@@ -80,14 +80,12 @@ trigger it, so one that appears out of the blue should be denied.
 Builds use the hardened runtime with only the entitlements in
 `Resources/YihaosNotch.entitlements`.
 
-**Back up the identity** once after creating it, so a damaged keychain never costs you
-the app's permissions:
-
-```sh
-./scripts/backup-signing-identity.sh            # writes ~/Documents/YihaosNotch-signing-backup.p12
-```
-
-Check it once with `./scripts/verify-signing-backup.sh`, which confirms the backup
+**The identity's backup** is written as it's created (it asks for a passphrase), to
+`~/Documents/YihaosNotch-signing-backup-<date>.p12`, so a damaged keychain never costs
+you the app's permissions. It's made from the key before it enters the keychain;
+afterwards the key can only be exported by typing the keychain's password, which is
+never shown, so an identity made before this has the one backup it already has.
+Check it once with `./scripts/verify-signing-backup.sh FILE.p12`, which confirms the backup
 opens with your passphrase and holds the identity the app is signed with. Keep the
 file and its passphrase in your password manager: together they let anyone sign as
 this app. If a build ever reports that the signing keychain didn't unlock,
@@ -124,9 +122,12 @@ To give the app to someone, build a disk image:
 They open it, drag the app into Applications, and the welcome screen takes it from
 there: no Terminal, no Xcode. Before each release, raise the version with
 `./scripts/bump-version.sh patch|minor|major` (fixes, features, big changes); it also
-raises the build number, which macOS and the app use to tell which copy is newer. Each release is
-tagged `v<version>` in git. The first run asks whether the script
-may control Finder, which it uses to lay out the disk image window.
+raises the build number, which macOS and the app use to tell which copy is newer.
+`release.sh` only releases a committed tree, runs `scripts/check.sh` first, refuses a
+version that's already tagged on another commit, and tags the commit `v<version>`
+when it's done (push with `git push origin HEAD v<version>`). `--allow-dirty` makes an
+untagged trial image. The first run asks whether the script may control Finder, which
+it uses to lay out the disk image window.
 
 **Without a Developer ID** (today), the image is signed with the local identity. It
 works, but macOS can't verify who made it, so each person allows it once in System
@@ -167,6 +168,19 @@ The media-key handling logs to the unified log:
 
 The app icon is drawn in code (`scripts/icon/render-icon.swift`); run
 `./scripts/make-icon.sh` after changing it.
+
+### Checks and tests
+
+```sh
+./scripts/check.sh   # debug build, tests, plist and script syntax; no signing, under a minute
+```
+
+Run it before every commit. The tests (`Tests/YihaosNotchTests`, Swift Testing) cover
+the pure logic where past bugs landed: what the closed notch shows, lyrics parsing,
+meeting links (look-alike domains, redirects, https only), player data, which copy
+carries on when two run, and the version bump. They never touch Calendar, the camera,
+Apple events or event taps: those would ask for permissions on Terminal's behalf, or
+control the real Music app. Window behaviour is checked by eye with the flags above.
 
 ## Layout
 

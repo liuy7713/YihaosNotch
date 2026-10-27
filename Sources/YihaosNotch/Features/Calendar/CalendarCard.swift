@@ -45,7 +45,6 @@ struct CalendarCard: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: selectedDay)
-        .onAppear { calendar.start() }
     }
 
     // MARK: Selected-day line

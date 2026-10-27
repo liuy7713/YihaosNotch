@@ -2,7 +2,11 @@
 # Builds the disk image to send to other people: dist/YihaosNotch-<version>.dmg, with
 # the usual "drag the app into Applications" window.
 #
-#   ./scripts/release.sh
+#   ./scripts/release.sh                 needs a clean, committed tree
+#   ./scripts/release.sh --allow-dirty   a trial image from uncommitted changes (not tagged)
+#
+# It runs scripts/check.sh first, and on success tags the commit v<version> (pushing
+# is left to you).
 #
 # With a Developer ID certificate in your login keychain (Apple Developer Program), the
 # app and disk image are signed with it and notarized by Apple, so they open on any
@@ -34,11 +38,23 @@ DIST="$ROOT/dist"
 DMG="$DIST/YihaosNotch-$VERSION.dmg"
 NOTARY_PROFILE="${NOTARY_PROFILE:-YihaosNotch}"
 
-[[ ! -e "$DMG" ]] || { echo "error: $DMG already exists; raise the version in Resources/Info.plist first." >&2; exit 1; }
+TAG="v$VERSION"
+ALLOW_DIRTY=false
+[[ "${1:-}" == "--allow-dirty" ]] && ALLOW_DIRTY=true
+
+[[ ! -e "$DMG" ]] || { echo "error: $DMG already exists; raise the version with scripts/bump-version.sh first." >&2; exit 1; }
 [[ ! -e "/Volumes/$VOLUME_NAME" ]] || { echo "error: eject the mounted \"$VOLUME_NAME\" disk image first." >&2; exit 1; }
-if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
-  echo "warning: there are uncommitted changes; this release won't match any commit."
+# Every release matches a commit, and each version is released from one commit only.
+if [[ -n "$(git status --porcelain)" ]] && ! $ALLOW_DIRTY; then
+  echo "error: there are uncommitted changes; commit them first (or pass --allow-dirty for a trial image)." >&2
+  exit 1
 fi
+if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null \
+   && [[ "$(git rev-parse "$TAG^{commit}")" != "$(git rev-parse HEAD)" ]]; then
+  echo "error: $TAG already tags another commit; raise the version with scripts/bump-version.sh first." >&2
+  exit 1
+fi
+"$ROOT/scripts/check.sh"
 
 # A Developer ID identity, if there is one.
 IDENTITY="${CODESIGN_IDENTITY:-}"
@@ -210,5 +226,11 @@ fi
 echo
 echo "Built $DMG"
 echo "SHA-256 $(shasum -a 256 "$DMG" | cut -d' ' -f1)"
+if $ALLOW_DIRTY && [[ -n "$(git status --porcelain)" ]]; then
+  echo "A trial image from uncommitted changes: not tagged. Delete it before the real release."
+else
+  git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || git tag "$TAG"
+  echo "Tagged $TAG. Publish with: git push origin HEAD $TAG"
+fi
 $NOTARIZE || echo "Not notarized: send HOW-TO-OPEN.txt (next to it) along with it."
 open -R "$DMG"

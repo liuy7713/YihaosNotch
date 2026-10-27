@@ -109,6 +109,26 @@ struct PlayerUpdate: Sendable {
         return PlayerUpdate(state: state, track: track, position: seconds(info["Playback Position"], scale: 1))
     }
 
+    /// Separates fields in script output; never appears in track metadata.
+    static let fieldSeparator = "\u{1F}"
+
+    /// Parses `statusScript`'s output: the state alone when stopped, otherwise state,
+    /// title, artist, album, duration, position, track ID and (Spotify) artwork URL.
+    /// Spotify gives durations in milliseconds, Music in seconds. Nil for no output.
+    static func fromScriptOutput(_ output: String, source: MusicSource) -> PlayerUpdate? {
+        guard !output.isEmpty else { return nil }
+        let fields = output.components(separatedBy: fieldSeparator)
+        guard fields.count >= 7 else { return PlayerUpdate(state: text(fields[0], limit: 40) ?? "stopped") }
+        let duration = seconds(fields[4], scale: source == .spotify ? 1000 : 1) ?? 0
+        // Capped like notification fields: the strings come from track metadata.
+        let id = (source == .music ? musicTrackID(fields[6]) : nil) ?? text(fields[6]) ?? ""
+        let track = Track(id: id, title: text(fields[1]) ?? "", artist: text(fields[2]) ?? "",
+                          album: text(fields[3]) ?? "", duration: duration)
+        return PlayerUpdate(state: text(fields[0], limit: 40) ?? "stopped", track: track,
+                            position: seconds(fields[5], scale: 1),
+                            artworkURL: fields.count > 7 ? text(fields[7], limit: 2000) : nil)
+    }
+
     /// The longest track or position accepted: a day. Anything outside is dropped.
     static let maxSeconds: Double = 86_400
 
@@ -189,10 +209,10 @@ final class NowPlayingService {
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     private static let lyricsCacheLimit = 200
-    /// Separates fields in script output; never appears in track metadata.
-    private static let fieldSeparator = "\u{1F}"
 
+    /// Safe to call again: a second set of observers would run every script twice.
     func start() {
+        guard observers.isEmpty else { return }
         let center = DistributedNotificationCenter.default()
         for source in MusicSource.allCases {
             observers.append(center.addObserver(forName: source.notificationName, object: nil, queue: .main) { note in
@@ -375,22 +395,14 @@ final class NowPlayingService {
     }
 
     private func sync(_ source: MusicSource) async {
-        guard source.isRunning, let output = await Osascript.run(Self.statusScript(for: source)), !output.isEmpty
+        guard source.isRunning, let output = await Osascript.run(Self.statusScript(for: source)),
+              let update = PlayerUpdate.fromScriptOutput(output, source: source)
         else { return }
-        let fields = output.components(separatedBy: Self.fieldSeparator)
-        guard fields.count >= 7 else {
-            apply(PlayerUpdate(state: fields.first ?? "stopped"), from: source)
-            return
-        }
-        let rawDuration = PlayerUpdate.seconds(fields[4], scale: source == .spotify ? 1000 : 1) ?? 0
-        let id = source == .music ? (PlayerUpdate.musicTrackID(fields[6]) ?? fields[6]) : fields[6]
-        let track = Track(id: id, title: fields[1], artist: fields[2], album: fields[3],
-                          duration: rawDuration)
-        apply(PlayerUpdate(state: fields[0], track: track, position: PlayerUpdate.seconds(fields[5], scale: 1),
-                           artworkURL: fields.count > 7 ? fields[7] : nil),
-              from: source)
+        apply(update, from: source)
     }
 
+    /// Fields come back joined by `PlayerUpdate.fieldSeparator`, in the order
+    /// `PlayerUpdate.fromScriptOutput` reads them.
     private static func statusScript(for source: MusicSource) -> String {
         let idProperty = source == .music ? "persistent ID" : "id"
         let artwork = source == .spotify ? " & sep & (artwork url of t)" : ""

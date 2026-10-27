@@ -304,6 +304,10 @@ private extension Float {
 /// typing never waits on the main thread, and every other key is passed straight back
 /// with nothing read but its key code. Only 144 and 145 hop to the main thread, where
 /// `handler` decides (as for any media key) whether the notch shows the change.
+///
+/// `stop()` runs on the main thread while the tap's thread may be re-enabling the tap,
+/// so the tap and its run loop are only touched under `lock`. (Unchecked because Core
+/// Foundation's types aren't marked Sendable.)
 final class BrightnessKeyTap: @unchecked Sendable {
     typealias Handler = @Sendable (_ up: Bool, _ isDown: Bool, _ isRepeat: Bool, _ modifiers: UInt) -> Bool
 
@@ -311,6 +315,7 @@ final class BrightnessKeyTap: @unchecked Sendable {
     static let brightnessDown: Int64 = 145
 
     fileprivate let handler: Handler
+    private let lock = NSLock()
     private var tap: CFMachPort?
     private var runLoop: CFRunLoop?
 
@@ -327,12 +332,12 @@ final class BrightnessKeyTap: @unchecked Sendable {
                                           callback: brightnessKeyTapCallback,
                                           userInfo: Unmanaged.passUnretained(self).toOpaque())
         else { return false }
-        self.tap = tap
+        lock.withLock { self.tap = tap }
         nonisolated(unsafe) let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
         let ready = DispatchSemaphore(value: 0)
         let thread = Thread { [self] in
             let loop = CFRunLoopGetCurrent()
-            runLoop = loop
+            lock.withLock { runLoop = loop }
             CFRunLoopAddSource(loop, source, .commonModes)
             ready.signal()
             CFRunLoopRun()
@@ -346,19 +351,21 @@ final class BrightnessKeyTap: @unchecked Sendable {
     }
 
     func stop() {
+        let (tap, runLoop) = lock.withLock {
+            defer { (self.tap, self.runLoop) = (nil, nil) }
+            return (self.tap, self.runLoop)
+        }
         if let tap {
             CGEvent.tapEnable(tap: tap, enable: false)
             CFMachPortInvalidate(tap)
         }
         if let runLoop { CFRunLoopStop(runLoop) }
-        tap = nil
-        runLoop = nil
     }
 
     /// macOS turns a tap off if a callback is slow or on some user input; turn it back
     /// on unless permission is gone (the main tap notices that and stops everything).
     fileprivate func reenable() {
-        guard let tap, AXIsProcessTrusted() else { return }
+        guard let tap = lock.withLock({ self.tap }), AXIsProcessTrusted() else { return }
         CGEvent.tapEnable(tap: tap, enable: true)
     }
 }
