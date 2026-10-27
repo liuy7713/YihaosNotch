@@ -2,11 +2,17 @@ import SwiftUI
 
 /// Shown in the right column when the header clock is clicked: presets to start a
 /// timer, or the running countdown with its controls.
+///
+/// The last tile is the custom one: it starts whatever it shows, like the others, and
+/// scrolling on it changes that (see `TimerDurations.stops`). It keeps its value.
 struct TimerPanel: View {
     @Environment(TimerService.self) private var timer
+    @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// When the last scroll tick played, so a quick swipe doesn't buzz.
+    @State private var lastTick = Date.distantPast
 
-    private static let presets = [1, 3, 5, 10, 15, 25, 45, 60]
+    private static let presets = [1, 3, 5, 10, 15, 25, 45]
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -29,25 +35,65 @@ struct TimerPanel: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
                 ForEach(Self.presets, id: \.self) { minutes in
                     Button { timer.start(minutes: minutes) } label: {
-                        VStack(spacing: 0) {
-                            Text("\(minutes)")
-                                .font(.system(size: 16, weight: .semibold, design: .rounded).monospacedDigit())
-                                .foregroundStyle(Theme.primary)
-                            Text("min")
-                                .font(.system(size: 9.5, weight: .medium))
-                                .foregroundStyle(Theme.tertiary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.fill))
-                        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        tile(number: "\(minutes)", caption: "min")
                     }
                     .buttonStyle(PressableStyle())
                     .accessibilityLabel("\(minutes) minute timer")
                 }
+                customTile
             }
             .padding(.horizontal, CalendarCard.inset)
         }
+    }
+
+    private var customTile: some View {
+        let minutes = settings.customTimerMinutes
+        return Button { timer.start(minutes: minutes) } label: {
+            tile(number: TimerDurations.label(minutes), caption: "custom")
+        }
+        .buttonStyle(PressableStyle())
+        .onScrollSteps { steps in adjustCustom(by: steps, haptic: true) }
+        .help("Scroll to change")
+        .accessibilityLabel("Custom timer")
+        .accessibilityValue(Duration.seconds(minutes * 60).formatted(.units(allowed: [.hours, .minutes], width: .wide)))
+        .accessibilityHint("Adjust to change the length.")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: adjustCustom(by: 1, haptic: false)
+            case .decrement: adjustCustom(by: -1, haptic: false)
+            @unknown default: break
+            }
+        }
+    }
+
+    private func adjustCustom(by steps: Int, haptic: Bool) {
+        let new = TimerDurations.adjust(settings.customTimerMinutes, by: steps)
+        // At either end nothing changes and nothing ticks: the missing tick is the stop.
+        guard new != settings.customTimerMinutes else { return }
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) {
+            settings.customTimerMinutes = new
+        }
+        guard haptic, settings.hapticsEnabled, Date.now.timeIntervalSince(lastTick) > 0.03 else { return }
+        lastTick = .now
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    }
+
+    private func tile(number: String, caption: String) -> some View {
+        VStack(spacing: 0) {
+            Text(number)
+                .font(.system(size: 16, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(Theme.primary)
+                .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(caption)
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(Theme.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 46)
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.fill))
+        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 
     private var running: some View {
@@ -71,7 +117,7 @@ struct TimerPanel: View {
                     .frame(height: 4)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Timer, \(remaining.countdownText) left")
+                .accessibilityLabel("Timer, \(Duration.seconds(Int(remaining.rounded(.up))).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))) left")
             }
             Text(isPaused ? "Paused" : "Ends at \((Date.now + timer.remaining()).shortTime)")
                 .font(.system(size: 11, weight: .medium).monospacedDigit())

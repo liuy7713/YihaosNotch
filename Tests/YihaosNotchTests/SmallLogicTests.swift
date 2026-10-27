@@ -3,9 +3,17 @@ import Testing
 @testable import YihaosNotch
 
 struct CountdownTests {
-    @Test(arguments: [(754.0, "12:34"), (0.2, "0:01"), (0, "0:00"), (3600, "60:00")])
+    @Test(arguments: [(754.0, "12:34"), (0.2, "0:01"), (0, "0:00"), (3600, "60:00"),
+                      (3600.5, "1:00:01"), (5400, "1:30:00"), (10_800, "3:00:00")])
     func text(_ seconds: TimeInterval, _ expected: String) {
         #expect(seconds.countdownText == expected)
+    }
+
+    /// The wings fit "mm:ss" only, so past an hour it's "1h 30", minutes rounded up.
+    @Test(arguments: [(754.0, "12:34"), (3600, "60:00"), (3601, "1h 01"), (5400, "1h 30"),
+                      (7199, "2h 00"), (10_800, "3h 00")])
+    func compactText(_ seconds: TimeInterval, _ expected: String) {
+        #expect(seconds.compactCountdownText == expected)
     }
 }
 

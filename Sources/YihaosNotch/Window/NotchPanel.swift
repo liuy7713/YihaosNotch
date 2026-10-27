@@ -19,6 +19,9 @@ final class NotchPanel: NSPanel {
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
         ignoresMouseEvents = true
+        // The app is almost never the active one, and tooltips are otherwise only
+        // shown for active apps.
+        allowsToolTipsWhenApplicationIsInactive = true
     }
 
     override var canBecomeKey: Bool { false }

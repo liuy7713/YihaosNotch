@@ -21,13 +21,16 @@ fingers), it shows:
   ends) that opens the meeting straight in its app. Settings chooses which calendars
   are shown.
 - **Timer**: click the clock in the header, or click the timer's wings while it runs.
-  A finished timer stays in the notch until you next come to it (up to a minute).
+  Seven presets and a custom tile: scroll on it to pick from 1 minute to 3 hours
+  (minutes to 20, then fives to an hour, then 75, 90, 120, 150, 180), click to start;
+  it keeps its value. Past an hour the wings show "1h 30". A finished timer stays in
+  the notch until you next come to it (up to a minute).
 - **Camera mirror**: a quick check before a call, with Center Stage (keeps you framed as
   you move) on cameras that have it, such as recent MacBooks' 12 MP camera, toggled from a
   button in the mirror.
 
 Optionally, the volume and brightness keys show a small indicator in the notch instead
-of the macOS pop-up.
+of the macOS pop-up (in the header while the panel is open).
 
 It runs only on the built-in display, sits at 0% CPU when idle, and uses about 20–30 MB
 of memory.

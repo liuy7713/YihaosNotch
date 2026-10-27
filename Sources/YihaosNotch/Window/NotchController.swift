@@ -133,10 +133,11 @@ final class NotchController {
         }
     }
 
-    /// True while the closed notch is on screen and could show a live activity, i.e.
-    /// not hidden (lid closed, no notch) and not covered by the open panel.
-    var canShowLiveActivity: Bool {
-        screenFrame != .zero && viewModel.state != .open
+    /// True while the notch is on screen to show a volume or brightness change: in
+    /// the wings when closed, in the header when open. Not when hidden (lid closed, no
+    /// notch), when the keys are left to macOS.
+    var canShowLevelChange: Bool {
+        screenFrame != .zero
     }
 
     // MARK: Layout

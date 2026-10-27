@@ -117,7 +117,7 @@ struct CompactActivityView: View {
             let isPaused = timer.isPaused
             TimelineView(.animation(minimumInterval: 1, paused: isPaused)) { context in
                 let remaining = timer.remaining(at: context.date)
-                Text(remaining.countdownText)
+                Text(remaining.compactCountdownText)
                     .font(.system(size: 12, weight: .semibold).monospacedDigit())
                     .foregroundStyle(isPaused ? Theme.secondary : remaining <= 10 ? Theme.today : Theme.primary)
             }
@@ -149,7 +149,7 @@ struct CompactActivityView: View {
         return (max(left, right) + 14).rounded(.up)
     }()
 
-    private static func speakerSymbol(level: Float, muted: Bool) -> String {
+    static func speakerSymbol(level: Float, muted: Bool) -> String {
         if muted || level <= 0 { return "speaker.slash.fill" }
         if level < 0.34 { return "speaker.wave.1.fill" }
         if level < 0.67 { return "speaker.wave.2.fill" }
@@ -162,18 +162,20 @@ struct CompactActivityView: View {
     }
 }
 
-/// A short level meter for volume and brightness.
-private struct LevelBar: View {
+/// A level meter for volume and brightness: short in the wings, longer in the open
+/// panel's header.
+struct LevelBar: View {
     let level: Float
+    var width: CGFloat = 26
 
     var body: some View {
         ZStack(alignment: .leading) {
             Capsule().fill(Theme.fillStrong)
             Capsule()
                 .fill(Theme.primary)
-                .frame(width: 26 * CGFloat(min(max(level, 0), 1)))
+                .frame(width: width * CGFloat(min(max(level, 0), 1)))
         }
-        .frame(width: 26, height: 4)
+        .frame(width: width, height: 4)
         .animation(.spring(response: 0.25, dampingFraction: 0.85), value: level)
         .accessibilityElement()
         .accessibilityValue(level.isFinite ? "\(Int((min(max(level, 0), 1) * 100).rounded())) percent" : "")

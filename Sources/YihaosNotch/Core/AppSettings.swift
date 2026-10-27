@@ -53,6 +53,10 @@ final class AppSettings {
     var hiddenCalendars: Set<String> {
         didSet { defaults.set(Array(hiddenCalendars).sorted(), forKey: Key.hiddenCalendars) }
     }
+    /// The custom timer tile's length in minutes, kept between uses.
+    var customTimerMinutes: Int {
+        didSet { defaults.set(customTimerMinutes, forKey: Key.customTimer) }
+    }
     /// Center Stage in the camera mirror, when the camera supports it.
     var cameraCenterStage: Bool {
         didSet { defaults.set(cameraCenterStage, forKey: Key.centerStage) }
@@ -83,6 +87,7 @@ final class AppSettings {
             Key.welcome: 0,
             Key.centerStage: true,
             Key.lyrics: true,
+            Key.customTimer: TimerDurations.defaultCustom,
         ])
         openTrigger = OpenTrigger(rawValue: d.string(forKey: Key.openTrigger) ?? "") ?? .hover
         hoverDelay = d.double(forKey: Key.hoverDelay)
@@ -96,6 +101,7 @@ final class AppSettings {
         welcomeCompleted = d.integer(forKey: Key.welcome)
         cameraCenterStage = d.bool(forKey: Key.centerStage)
         showLyrics = d.bool(forKey: Key.lyrics)
+        customTimerMinutes = min(max(d.integer(forKey: Key.customTimer), 1), TimerService.maxMinutes)
         hiddenCalendars = Set(d.stringArray(forKey: Key.hiddenCalendars) ?? [])
     }
 
@@ -112,6 +118,7 @@ final class AppSettings {
         static let welcome = "welcomeCompleted"
         static let centerStage = "cameraCenterStage"
         static let lyrics = "showLyrics"
+        static let customTimer = "customTimerMinutes"
         static let hiddenCalendars = "hiddenCalendars"
     }
 }

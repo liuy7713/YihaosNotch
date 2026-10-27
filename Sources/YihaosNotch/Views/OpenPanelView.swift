@@ -85,6 +85,18 @@ struct OpenPanelView: View {
                 batteryIndicator
                     .padding(.leading, 6)
             }
+            // A volume or brightness change takes this side of the header for a moment,
+            // as it takes the wings when the notch is closed. The icons stay laid out
+            // underneath, so nothing shifts and the battery keeps its readings.
+            .opacity(model.levelChange == nil ? 1 : 0)
+            .allowsHitTesting(model.levelChange == nil)
+            .overlay(alignment: .trailing) {
+                if let change = model.levelChange {
+                    LevelChangeView(change: change)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: model.levelChange == nil)
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 22)
@@ -196,7 +208,7 @@ private struct ClockButton: View {
                         HStack(spacing: 3) {
                             Image(systemName: "timer")
                                 .font(.system(size: 10, weight: .bold))
-                            Text(timer.remaining(at: context.date).countdownText)
+                            Text(timer.remaining(at: context.date).compactCountdownText)
                         }
                         .foregroundStyle(Theme.secondary)
                     }
@@ -220,5 +232,31 @@ private struct ClockButton: View {
         .animation(.easeOut(duration: 0.2), value: timer.isActive)
         .help("Timer")
         .accessibilityLabel(timer.isActive ? "Timer running" : "Timer")
+    }
+}
+
+/// The header's volume or brightness indicator: the wings' symbol and a longer bar.
+private struct LevelChangeView: View {
+    let change: LiveActivity
+
+    var body: some View {
+        HStack(spacing: 8) {
+            switch change {
+            case .volume(let level, let muted):
+                Image(systemName: CompactActivityView.speakerSymbol(level: level, muted: muted))
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 18)
+                LevelBar(level: muted ? 0 : level, width: 120)
+            case .brightness(let level):
+                Image(systemName: level < 0.5 ? "sun.min.fill" : "sun.max.fill")
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 18)
+                LevelBar(level: level, width: 120)
+            default:
+                EmptyView()
+            }
+        }
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(Theme.primary)
     }
 }

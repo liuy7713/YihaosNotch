@@ -10,8 +10,8 @@ private let log = Logger(subsystem: "com.yihao.YihaosNotch", category: "MediaKey
 /// An event tap catches the volume, mute and brightness keys before macOS does, applies
 /// the change itself and reports it, so the system pop-up never appears. Event taps need
 /// Accessibility permission, so this is opt-in from Settings. The keys are left to macOS
-/// whenever the notch can't show the change (panel open, notch hidden), without
-/// permission, and for outputs whose volume or mute can't be set.
+/// whenever the notch can't show the change (lid closed, no notch), without permission,
+/// and for outputs whose volume or mute can't be set.
 @MainActor
 @Observable
 final class MediaKeyController {
@@ -20,8 +20,8 @@ final class MediaKeyController {
 
     @ObservationIgnored var onVolume: ((_ level: Float, _ muted: Bool) -> Void)?
     @ObservationIgnored var onBrightness: ((_ level: Float) -> Void)?
-    /// Whether the closed notch is on screen to show the change. When it isn't, keys
-    /// go to macOS so there's always some feedback.
+    /// Whether the notch is on screen to show the change. When it isn't, keys go to
+    /// macOS so there's always some feedback.
     @ObservationIgnored var canShowHUD: () -> Bool = { true }
 
     @ObservationIgnored private var wanted = false

@@ -31,8 +31,9 @@ final class TimerService {
             forName: .NSSystemClockDidChange, object: nil, queue: .main, using: resync)))
     }
 
-    /// Longest timer, so the countdown always fits the wing as "mm:ss".
-    static let maxMinutes = 99
+    /// Longest timer: three hours, the custom tile's last stop. Past an hour the wings
+    /// show "1h 30" (see `compactCountdownText`), as narrow as "mm:ss".
+    nonisolated static let maxMinutes = 180
 
     var isActive: Bool { phase != .idle }
 
@@ -49,7 +50,7 @@ final class TimerService {
     }
 
     func start(minutes: Int) {
-        total = TimeInterval(min(minutes, Self.maxMinutes) * 60)
+        total = TimeInterval(min(max(minutes, 1), Self.maxMinutes) * 60)
         run(for: total)
     }
 
@@ -111,9 +112,20 @@ final class TimerService {
 }
 
 extension TimeInterval {
-    /// 754 → "12:34". Rounds up, so a timer shows 0:00 only when it's done.
+    /// 754 → "12:34", 5400 → "1:30:00". Rounds up, so a timer shows 0:00 only when
+    /// it's done. An hour exactly is still "60:00", as the 60-minute preset starts.
     var countdownText: String {
         let total = Int(self.rounded(.up))
-        return String(format: "%d:%02d", total / 60, total % 60)
+        guard total > 3600 else { return String(format: "%d:%02d", total / 60, total % 60) }
+        return String(format: "%d:%02d:%02d", total / 3600, total % 3600 / 60, total % 60)
+    }
+
+    /// For the wings and the header, which have room for "mm:ss" only: past an hour,
+    /// "1h 30", with the minutes rounded up so it never reads less than what's left.
+    var compactCountdownText: String {
+        let total = Int(self.rounded(.up))
+        guard total > 3600 else { return countdownText }
+        let minutes = (total + 59) / 60
+        return String(format: "%dh %02d", minutes / 60, minutes % 60)
     }
 }

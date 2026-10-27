@@ -30,6 +30,10 @@ if ! out="$(swift build --scratch-path "$SCRATCH" 2>&1)"; then
 fi
 print -r -- "$out" | grep "warning:" || true
 echo "› Tests"
-if ! out="$(swift test --scratch-path "$SCRATCH" 2>&1)"; then print -r -- "$out" | tail -60; exit 1; fi
+if ! out="$(swift test --scratch-path "$SCRATCH" 2>&1)"; then
+  # Compiler errors, or the failing tests and their issues.
+  print -r -- "$out" | grep -E "(error|warning): |✘|↳" | grep -v "nonzero exit code" | head -60
+  exit 1
+fi
 print -r -- "$out" | grep -E "^.*Test run with" || true
 echo "All checks passed."

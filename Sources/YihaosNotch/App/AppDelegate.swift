@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.controller = controller
         SettingsWindowController.shared.onShow = { [weak controller] in controller?.dismissPanel() }
         NSApp.mainMenu = Self.makeMainMenu()
-        mediaKeys.canShowHUD = { [weak controller] in controller?.canShowLiveActivity ?? false }
+        mediaKeys.canShowHUD = { [weak controller] in controller?.canShowLevelChange ?? false }
 
         follow({ [settings] in settings.showLyrics }) { [nowPlaying] in nowPlaying.lyricsEnabled = $0 }
         follow({ [settings] in settings.hiddenCalendars }) { [calendar] in calendar.hiddenCalendars = $0 }

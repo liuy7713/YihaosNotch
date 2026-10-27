@@ -113,6 +113,15 @@ final class NotchViewModel {
         return nil
     }
 
+    /// A volume or brightness change being shown, for the open panel's header (closed,
+    /// the wings show it).
+    var levelChange: LiveActivity? {
+        switch transient {
+        case .volume, .brightness: transient
+        default: nil
+        }
+    }
+
     /// Shows a finished timer's "Done" until the user comes to the notch, or for a
     /// minute, in case they were away.
     func showTimerDone() {
