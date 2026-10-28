@@ -265,6 +265,9 @@ private struct DayCell: View {
     let isPast: Bool
     let dots: [Color]
 
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var withoutColor
+    @Environment(\.colorSchemeContrast) private var contrast
+
     var body: some View {
         VStack(spacing: 3) {
             Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
@@ -276,6 +279,12 @@ private struct DayCell: View {
                 .foregroundStyle(numberColor)
                 .frame(width: 25, height: 25)
                 .background(Circle().fill(circleColor))
+                // Today is otherwise marked by red alone.
+                .overlay {
+                    if withoutColor && isToday && !isSelected {
+                        Circle().strokeBorder(Theme.today, lineWidth: 1.5)
+                    }
+                }
             HStack(spacing: 2.5) {
                 ForEach(Array(dots.enumerated()), id: \.offset) { _, color in
                     Circle()
@@ -284,7 +293,7 @@ private struct DayCell: View {
                 }
             }
             .frame(height: 4)
-            .opacity(isPast ? 0.5 : 1)
+            .opacity(isPast ? (contrast == .increased ? 0.75 : 0.5) : 1)
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
@@ -358,6 +367,8 @@ private struct EventRow: View {
     private var hasEnded: Bool { item.hasEnded(at: now) }
     private var minutesUntilStart: Int { Int((item.start.timeIntervalSince(now) / 60).rounded(.up)) }
     private var showsCountdown: Bool { isToday && (1..<60).contains(minutesUntilStart) }
+    @Environment(\.colorSchemeContrast) private var contrast
+
     /// The Join button becomes solid from 10 minutes before the start.
     private var joinIsUrgent: Bool { isToday && (isOngoing || (0...10).contains(minutesUntilStart)) }
 
@@ -389,7 +400,7 @@ private struct EventRow: View {
             .padding(.horizontal, CalendarCard.inset)
             .padding(.vertical, 3)
             .contentShape(Rectangle())
-            .opacity(hasEnded && !item.isAllDay ? 0.42 : 1)
+            .opacity(hasEnded && !item.isAllDay ? (contrast == .increased ? 0.65 : 0.42) : 1)
         }
         .buttonStyle(PressableStyle())
         .hoverHighlight(cornerRadius: 9)

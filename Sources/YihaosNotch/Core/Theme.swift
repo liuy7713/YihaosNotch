@@ -1,15 +1,26 @@
+import AppKit
 import SwiftUI
 
 /// Visual language: pure black that disappears into the bezel, white text at a few
 /// fixed opacities, and colour only where it carries meaning (album art, calendars,
 /// battery state).
 enum Theme {
-    static let primary = Color.white.opacity(0.94)
-    static let secondary = Color.white.opacity(0.58)
-    static let tertiary = Color.white.opacity(0.36)
-    static let hairline = Color.white.opacity(0.09)
-    static let fill = Color.white.opacity(0.07)
-    static let fillStrong = Color.white.opacity(0.13)
+    static let primary = white(0.94, increased: 1)
+    static let secondary = white(0.58, increased: 0.8)
+    /// The faintest text, so at least 4.5:1 on black: the minimum for small text.
+    static let tertiary = white(0.46, increased: 0.66)
+    static let hairline = white(0.09, increased: 0.3)
+    static let fill = white(0.07, increased: 0.14)
+    static let fillStrong = white(0.13, increased: 0.26)
+
+    /// White at `opacity`, or at `increased` while Increase Contrast is on. Still a
+    /// plain Color, resolved wherever it's drawn, so it follows the setting live.
+    /// (Read from the system: AppKit doesn't hand out high-contrast appearances.)
+    static func white(_ opacity: Double, increased: Double) -> Color {
+        Color(nsColor: NSColor(name: nil) { _ in
+            NSColor(white: 1, alpha: NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? increased : opacity)
+        })
+    }
 
     static let charge = Color(red: 0.40, green: 0.86, blue: 0.50)
     static let low = Color(red: 1.00, green: 0.38, blue: 0.34)

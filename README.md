@@ -35,6 +35,12 @@ of the macOS pop-up (in the header while the panel is open).
 It runs only on the built-in display, sits at 0% CPU when idle, and uses about 20–30 MB
 of memory.
 
+Text is at least 4.5:1 against the black, lyrics included, whatever colour the album
+art gives them. It follows the Accessibility display settings: Increase Contrast
+brightens text, outlines and past events; Differentiate Without Colour rings today in
+the calendar; Reduce Motion swaps slides and bounces for fades. Text sizes are fixed,
+as the notch has no room to grow.
+
 ## Requirements
 
 - A MacBook with a notch, so Apple silicon (it does nothing on Macs without one, or at
