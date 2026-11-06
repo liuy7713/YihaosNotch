@@ -16,7 +16,8 @@ that aren't obvious from the code.
   under /Users.
 - Versions: `scripts/bump-version.sh patch|minor|major`, then `scripts/release.sh`
   (clean tree; it tags), then push the branch and the tag, then
-  `scripts/publish-release.sh` (GitHub Release). Keep only the latest DMG in `dist/`.
+  `scripts/publish-release.sh NOTES.md` (GitHub Release; the notes say what's new in
+  words for people using the app). Keep only the latest DMG in `dist/`.
 - `notes/` (reviews) is git-ignored on purpose.
 
 ## Invariants

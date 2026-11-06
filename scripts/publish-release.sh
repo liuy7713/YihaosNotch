@@ -2,7 +2,10 @@
 # Publishes the current version as a GitHub Release, after release.sh has built it and
 # the branch and tag are pushed:
 #
-#   ./scripts/publish-release.sh
+#   ./scripts/publish-release.sh [NOTES.md]
+#
+# NOTES.md is what's new, in words for people using the app; without it the tagged
+# commit's message is used.
 #
 # Uploads the disk image twice, as YihaosNotch-<version>.dmg and as YihaosNotch.dmg, so
 # releases/latest/download/YihaosNotch.dmg (the README's download link) always gets the
@@ -31,7 +34,11 @@ fi
 SHA="$(shasum -a 256 "$DMG" | cut -d' ' -f1)"
 # The leaf hash names the certificate that signed this build; it's public, not a secret.
 LEAF="$(codesign -d -r- "$APP" 2>&1 | grep -o 'certificate leaf = H"[0-9a-f]*"' || true)"
-CHANGES="$(git log -1 --format=%B "$TAG")"
+if [[ -n "${1:-}" ]]; then
+  CHANGES="$(<"$1")"
+else
+  CHANGES="$(git log -1 --format=%B "$TAG")"
+fi
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

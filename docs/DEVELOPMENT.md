@@ -56,7 +56,8 @@ raises the build number, which macOS and the app use to tell which copy is newer
 `release.sh` only releases a committed tree, runs `scripts/check.sh` first, refuses a
 version that's already tagged on another commit, and tags the commit `v<version>`
 when it's done (push with `git push origin HEAD v<version>`). Then
-`./scripts/publish-release.sh` publishes it as a GitHub Release: the image under its
+`./scripts/publish-release.sh NOTES.md` publishes it as a GitHub Release, with NOTES.md
+(what's new, for people using the app) at the top: the image under its
 own name and as `YihaosNotch.dmg` (the README's always-latest download link), with
 HOW-TO-OPEN.txt and notes giving the SHA-256 and the signing certificate's hash. `--allow-dirty` makes an
 untagged trial image. The first run asks whether the script may control Finder, which
