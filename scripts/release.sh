@@ -203,7 +203,8 @@ made it and asks you to confirm once that you trust it. That's expected, not a f
 2. Open Yihao's Notch from Applications. macOS says:
      "Yihao's Notch" Not Opened. Apple could not verify "Yihao's Notch" is free of
      malware that may harm your Mac or compromise your privacy.
-   Click Done (not Move to Trash).
+   Click Done. Not the blue Move to Bin (or Move to Trash) button: it's the default,
+   so pressing Return would delete the app.
 
 3. Open System Settings > Privacy & Security and scroll to the bottom, under
    Security. Next to "Yihao's Notch" was blocked..., click Open Anyway and enter your

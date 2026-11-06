@@ -11,8 +11,9 @@ want it.
 (free; a MacBook with a notch and macOS 15 or later).
 
 1. Open the downloaded file and drag **Yihao's Notch** into **Applications**.
-2. Open it from Applications. macOS says Apple "could not verify" it: click **Done**
-   (not Move to Trash). That's expected: the app isn't notarized by Apple, which
+2. Open it from Applications. macOS says Apple "could not verify" it: click **Done**.
+   Not the blue **Move to Bin** (or Move to Trash) button, which is the default and
+   deletes the app. The warning is expected: the app isn't notarized by Apple, which
    needs a paid developer account, so macOS can't check who made it.
 3. Open **System Settings › Privacy & Security**, scroll down to **Security**, and click
    **Open Anyway** next to "Yihao's Notch" was blocked. Enter your password, then
