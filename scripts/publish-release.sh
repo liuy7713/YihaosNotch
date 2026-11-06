@@ -51,8 +51,8 @@ cp "$DMG" "$WORK/YihaosNotch.dmg"
   if [[ -f "$HOW_TO" ]]; then
     print
     print -r -- "This build isn't notarized by Apple, so macOS asks you to allow it once: open the app,"
-    print -r -- "click Done, then System Settings › Privacy & Security › Open Anyway. Step by step:"
-    print -r -- "HOW-TO-OPEN.txt below, or the README."
+    print -r -- "click Done (not the blue Move to Bin button), then System Settings › Privacy & Security ›"
+    print -r -- "Open Anyway. Step by step: HOW-TO-OPEN.txt below, or the README."
   fi
   print
   print -r -- "Only download it from this page. To check your copy:"
