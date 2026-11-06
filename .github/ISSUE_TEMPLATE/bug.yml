@@ -1,0 +1,35 @@
+name: Something isn't working
+description: Report a problem with Yihao's Notch.
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown at the bottom of Settings.
+      placeholder: "1.5.3"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and macOS version
+      placeholder: "MacBook Pro 14-inch (M4), macOS 26.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Where did you download it?
+      options:
+        - This repository's Releases page
+        - Built it from source
+        - Somewhere else
+    validations:
+      required: true

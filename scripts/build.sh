@@ -30,6 +30,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/YihaosNotch" "$APP/Contents/MacOS/YihaosNotch"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 [[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+# MIT asks for the notice in every copy, so it travels inside the app.
+cp LICENSE "$APP/Contents/Resources/LICENSE"
 
 # Sign with the local self-signed identity (see scripts/make-signing-identity.sh) so
 # macOS keeps permissions across rebuilds. Falls back to ad-hoc signing.

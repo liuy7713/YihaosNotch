@@ -5,3 +5,13 @@ build/
 *.xcodeproj/xcuserdata/
 notes/
 dist/
+.swiftpm/
+xcuserdata/
+DerivedData/
+*.p12
+*.pem
+*.cer
+*.keychain-db
+*.dmg
+.env
+.env.*

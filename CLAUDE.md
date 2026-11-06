@@ -1,17 +1,22 @@
 # Working on Yihao's Notch
 
-A macOS notch app (SwiftPM, Swift 6, macOS 15+). README.md explains the features,
-build, release and layout; this file holds the rules that aren't obvious from the code.
+A macOS notch app (SwiftPM, Swift 6, macOS 15+). README.md is for people using the app;
+docs/DEVELOPMENT.md explains build, release and layout; this file holds the rules
+that aren't obvious from the code.
 
 ## Every change
 - Run `./scripts/check.sh` before committing; it needs no signing.
 - `./scripts/build.sh` signs with the local identity, so the user has to click **Allow**
   (not Always Allow) on the "YihaosNotchSigning" dialog. Tell them before each build.
 - Commits are authored "Yihao Liu" with the GitHub noreply address set in the repo
-  config. Never use another email. The repo is private.
+  config. Never use another email. No "Co-Authored-By" or other AI attribution lines
+  in commit messages, tags, releases or PRs.
+- The repo is **public**: never commit `notes/`, `dist/`, screenshots with personal
+  data (real events, device names, camera frames), signing material or absolute paths
+  under /Users.
 - Versions: `scripts/bump-version.sh patch|minor|major`, then `scripts/release.sh`
-  (clean tree; it tags), then push the branch and the tag. Keep only the latest DMG in
-  `dist/`.
+  (clean tree; it tags), then push the branch and the tag, then
+  `scripts/publish-release.sh` (GitHub Release). Keep only the latest DMG in `dist/`.
 - `notes/` (reviews) is git-ignored on purpose.
 
 ## Invariants

@@ -203,7 +203,7 @@ made it and asks you to confirm once that you trust it. That's expected, not a f
 2. Open Yihao's Notch from Applications. macOS says:
      "Yihao's Notch" Not Opened. Apple could not verify "Yihao's Notch" is free of
      malware that may harm your Mac or compromise your privacy.
-   Click Done.
+   Click Done (not Move to Trash).
 
 3. Open System Settings > Privacy & Security and scroll to the bottom, under
    Security. Next to "Yihao's Notch" was blocked..., click Open Anyway and enter your
@@ -220,6 +220,9 @@ Updating: drag the new version into Applications as before, replacing the old on
 then open it. If it says "Not Opened", repeat steps 2-4. Versions before 1.3.2 don't
 notice an update while they're running: if the notch still shows the old version,
 right-click the gear in the notch, choose Quit, and open the app again.
+
+Only download it from https://github.com/liuy7713/YihaosNotch/releases: copies from
+anywhere else aren't mine. Free and open source under the MIT licence.
 TXT
 fi
 

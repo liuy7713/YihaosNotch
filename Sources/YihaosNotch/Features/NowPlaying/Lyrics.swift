@@ -140,10 +140,10 @@ enum LyricsFetcher {
         ])
     }
 
-    /// LRCLIB asks clients to identify themselves by name and version.
+    /// LRCLIB asks clients to identify themselves by name, version and homepage.
     private static let userAgent: String = {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
-        return "YihaosNotch/\(version)"
+        return "YihaosNotch/\(version) (https://github.com/liuy7713/YihaosNotch)"
     }()
 
     private static func request<T: Decodable>(path: String, query: [URLQueryItem]) async -> Response<T> {
