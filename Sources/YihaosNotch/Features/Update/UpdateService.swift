@@ -24,6 +24,8 @@ final class UpdateService {
     }
 
     private(set) var state: State = .idle
+    /// When GitHub last answered, for "Checked at …" in Settings.
+    private(set) var lastChecked: Date?
 
     var available: Release? {
         if case .available(let release) = state { release } else { nil }
@@ -69,6 +71,7 @@ final class UpdateService {
         }
         let previous = state
         state = .checking
+        let started = ContinuousClock.now
         var request = URLRequest(url: feed)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue(Network.userAgent, forHTTPHeaderField: "User-Agent")
@@ -76,10 +79,13 @@ final class UpdateService {
               (response as? HTTPURLResponse)?.statusCode == 200,
               let release = Release.parse(data, anyDownload: testFeed)
         else {
+            if userInitiated { await Self.holdUntil(started) }
             log.error("update check failed")
             state = userInitiated ? .checkFailed : previous
             return
         }
+        if userInitiated { await Self.holdUntil(started) }
+        lastChecked = .now
         defaults.set(Date.now, forKey: Self.lastCheckKey)
         if let current = Self.currentVersion, current < release.version {
             log.info("version \(release.version.description, privacy: .public) is available")
@@ -87,6 +93,12 @@ final class UpdateService {
         } else {
             state = .upToDate
         }
+    }
+
+    /// A check usually answers in a fraction of a second, too fast to see that
+    /// anything happened; one the user asked for shows "Checking…" for a second.
+    private static func holdUntil(_ start: ContinuousClock.Instant) async {
+        try? await Task.sleep(until: start + .seconds(1), clock: .continuous)
     }
 
     /// Replaces this copy with the available release and restarts it. When this copy

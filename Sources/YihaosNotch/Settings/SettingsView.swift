@@ -169,6 +169,14 @@ struct SettingsView: View {
         return shown == calendar.calendars.count ? "All" : "\(shown) of \(calendar.calendars.count)"
     }
 
+    private var checked: String {
+        guard let date = updates.lastChecked else { return "" }
+        let time = Calendar.current.isDateInToday(date)
+            ? date.formatted(date: .omitted, time: .shortened)
+            : date.formatted(.dateTime.day().month().hour().minute())
+        return " Checked at \(time)."
+    }
+
     private static var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
     }
@@ -229,12 +237,20 @@ private struct UpdateRow: View {
         switch updates.state {
         case .idle: "Version \(Self.version)"
         case .checking: "Checking…"
-        case .upToDate: "Version \(Self.version) is the latest."
+        case .upToDate: "Version \(Self.version) is the latest.\(checked)"
         case .available(let release): "Version \(release.version) is available."
         case .installing: "Downloading and installing; it restarts by itself."
         case .checkFailed: "Couldn't reach GitHub. Check your connection."
         case .installFailed(let reason): "\(reason) You can download it instead."
         }
+    }
+
+    private var checked: String {
+        guard let date = updates.lastChecked else { return "" }
+        let time = Calendar.current.isDateInToday(date)
+            ? date.formatted(date: .omitted, time: .shortened)
+            : date.formatted(.dateTime.day().month().hour().minute())
+        return " Checked at \(time)."
     }
 
     private static var version: String {
