@@ -8,6 +8,7 @@ struct OpenPanelView: View {
     @Environment(BatteryService.self) private var battery
     @Environment(CalendarService.self) private var calendar
     @Environment(TimerService.self) private var timer
+    @Environment(UpdateService.self) private var updates
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum RightMode { case camera, timer, calendar, clock }
@@ -74,7 +75,9 @@ struct OpenPanelView: View {
                     model.showingCamera.toggle()
                     model.showingTimer = false
                 }
-                HeaderIconButton(systemName: "gearshape.fill", label: "Settings") {
+                HeaderIconButton(systemName: "gearshape.fill",
+                                 label: updates.available == nil ? "Settings" : "Settings: an update is available",
+                                 badge: updates.available != nil) {
                     SettingsWindowController.shared.show()
                 }
                 // A home for Quit that doesn't need a window; adds nothing to the panel.

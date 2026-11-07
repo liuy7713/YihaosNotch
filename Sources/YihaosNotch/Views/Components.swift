@@ -187,6 +187,8 @@ struct HeaderIconButton: View {
     /// Spoken by VoiceOver and shown as the tooltip.
     let label: String
     var active = false
+    /// A small dot: something there wants a look (an update, for the gear).
+    var badge = false
     let action: () -> Void
 
     var body: some View {
@@ -196,8 +198,18 @@ struct HeaderIconButton: View {
                 .foregroundStyle(active ? Color.black : Theme.secondary)
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(active ? Theme.primary : .clear))
+                .overlay(alignment: .topTrailing) {
+                    if badge {
+                        Circle()
+                            .fill(Theme.primary)
+                            .frame(width: 6, height: 6)
+                            .offset(x: -4, y: 4)
+                            .transition(.opacity)
+                    }
+                }
                 .contentShape(Circle())
                 .animation(.easeOut(duration: 0.2), value: active)
+                .animation(.easeOut(duration: 0.2), value: badge)
         }
         .buttonStyle(PressableStyle())
         .hoverHighlight(cornerRadius: 13)

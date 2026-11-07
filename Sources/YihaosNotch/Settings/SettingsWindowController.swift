@@ -14,8 +14,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let frameName = "Settings"
 
     /// Called once at launch with the services the settings window controls.
-    func configure(settings: AppSettings, calendar: CalendarService, mediaKeys: MediaKeyController) {
-        makeView = { SettingsView(settings: settings, calendar: calendar, mediaKeys: mediaKeys) }
+    func configure(settings: AppSettings, calendar: CalendarService, mediaKeys: MediaKeyController,
+                   updates: UpdateService) {
+        makeView = { SettingsView(settings: settings, calendar: calendar, mediaKeys: mediaKeys, updates: updates) }
     }
 
     func show() {

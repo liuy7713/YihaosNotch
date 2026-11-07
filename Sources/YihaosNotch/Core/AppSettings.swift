@@ -57,6 +57,10 @@ final class AppSettings {
     var customTimerMinutes: Int {
         didSet { defaults.set(customTimerMinutes, forKey: Key.customTimer) }
     }
+    /// Looks for a new version on GitHub once a day.
+    var checkForUpdates: Bool {
+        didSet { defaults.set(checkForUpdates, forKey: Key.updates) }
+    }
     /// Center Stage in the camera mirror, when the camera supports it.
     var cameraCenterStage: Bool {
         didSet { defaults.set(cameraCenterStage, forKey: Key.centerStage) }
@@ -88,6 +92,7 @@ final class AppSettings {
             Key.centerStage: true,
             Key.lyrics: true,
             Key.customTimer: TimerDurations.defaultCustom,
+            Key.updates: true,
         ])
         openTrigger = OpenTrigger(rawValue: d.string(forKey: Key.openTrigger) ?? "") ?? .hover
         hoverDelay = d.double(forKey: Key.hoverDelay)
@@ -103,6 +108,7 @@ final class AppSettings {
         showLyrics = d.bool(forKey: Key.lyrics)
         customTimerMinutes = min(max(d.integer(forKey: Key.customTimer), 1), TimerService.maxMinutes)
         hiddenCalendars = Set(d.stringArray(forKey: Key.hiddenCalendars) ?? [])
+        checkForUpdates = d.bool(forKey: Key.updates)
     }
 
     private enum Key {
@@ -120,5 +126,6 @@ final class AppSettings {
         static let lyrics = "showLyrics"
         static let customTimer = "customTimerMinutes"
         static let hiddenCalendars = "hiddenCalendars"
+        static let updates = "checkForUpdates"
     }
 }

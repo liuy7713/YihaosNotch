@@ -1,5 +1,9 @@
 import AppKit
+import AVFoundation
+import EventKit
+import ServiceManagement
 import SwiftUI
+import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -11,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let timer = TimerService()
     private let mediaKeys = MediaKeyController()
     private let headphones = HeadphoneMonitor()
+    private let updates = UpdateService()
     private var viewModel: NotchViewModel!
     private var controller: NotchController?
 
@@ -20,7 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         viewModel = NotchViewModel(settings: settings, nowPlaying: nowPlaying, calendar: calendar, timer: timer)
-        SettingsWindowController.shared.configure(settings: settings, calendar: calendar, mediaKeys: mediaKeys)
+        SettingsWindowController.shared.configure(settings: settings, calendar: calendar, mediaKeys: mediaKeys,
+                                                  updates: updates)
         WelcomeWindowController.shared.configure(settings: settings, calendar: calendar, mediaKeys: mediaKeys)
         WelcomeWindowController.shared.onFinish = { [weak self] in self?.welcomeFinished() }
 
@@ -48,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environment(calendar)
             .environment(camera)
             .environment(timer)
+            .environment(updates)
 
         let controller = NotchController(viewModel: viewModel, settings: settings, content: AnyView(root))
         controller.onOpen = { [nowPlaying, calendar] in
@@ -68,7 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // runs: it asks for each one itself, with a reason. (Reading the players sends
         // them Apple events, which prompts.)
         let welcoming = settings.needsWelcome
-        if !welcoming { nowPlaying.start() }
+        if !welcoming {
+            nowPlaying.start()
+            followUpdateSetting()
+        }
         battery.start()
         // Never asks at launch (which is often login): the welcome, the notch's Connect
         // Calendar button and Settings ask, when the user is looking.
@@ -82,6 +92,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Development aid: `--preview-settings` opens Settings at launch.
         if CommandLine.arguments.contains("--preview-settings") { SettingsWindowController.shared.show() }
         runPreviewFlags()
+    }
+
+    /// Daily update checks start once the welcome is done, like everything else
+    /// that reaches outside the Mac.
+    private func followUpdateSetting() {
+        follow({ [settings] in settings.checkForUpdates }) { [updates] in updates.automatic = $0 }
+        // Development aid: with `--update-feed`, log what an update must keep working.
+        if CommandLine.arguments.contains("--update-feed") {
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+            // Reading these never prompts, and the camera stays off.
+            Logger(subsystem: "com.yihao.YihaosNotch", category: "Updater").info("""
+                running build \(build, privacy: .public) at \(Bundle.main.bundlePath, privacy: .public); \
+                canReplace=\(UpdateInstaller.canReplace()) accessibility=\(AXIsProcessTrusted()) \
+                calendar=\(EKEventStore.authorizationStatus(for: .event).rawValue) \
+                camera=\(AVCaptureDevice.authorizationStatus(for: .video).rawValue) \
+                loginItem=\(SMAppService.mainApp.status.rawValue)
+                """)
+        }
     }
 
     /// Hands the setting `read` returns to `apply` now and whenever it changes, so
@@ -99,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard settings.needsWelcome else { return }
         settings.completeWelcome()
         nowPlaying.start()
+        followUpdateSetting()
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(0.6))
             self?.controller?.greet()

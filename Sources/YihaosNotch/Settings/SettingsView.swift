@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Bindable var settings: AppSettings
     let calendar: CalendarService
     let mediaKeys: MediaKeyController
+    let updates: UpdateService
 
     @State private var loginItemStatus = SMAppService.mainApp.status
     @State private var choosingCalendars = false
@@ -64,6 +65,8 @@ struct SettingsView: View {
                         Button("Open Login Items…") { SMAppService.openSystemSettingsLoginItems() }
                     }
                 }
+                UpdateRow(updates: updates)
+                Toggle("Check for updates daily", isOn: $settings.checkForUpdates)
             }
 
             Section("Calendar") {
@@ -190,6 +193,52 @@ struct SettingsView: View {
             }
             loginItemStatus = SMAppService.mainApp.status
         }
+    }
+}
+
+/// Where updates stand, and the one action that makes sense right now.
+private struct UpdateRow: View {
+    let updates: UpdateService
+
+    var body: some View {
+        LabeledContent {
+            HStack(spacing: 10) {
+                switch updates.state {
+                case .checking, .installing:
+                    ProgressView().controlSize(.small)
+                case .available:
+                    Button("What's New") { updates.openReleasePage() }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Theme.secondary)
+                    Button("Update") { updates.install() }
+                case .installFailed:
+                    Button("Download Page…") { updates.openReleasePage() }
+                default:
+                    Button("Check Now") { Task { await updates.check() } }
+                }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Updates")
+                Caption(status)
+            }
+        }
+    }
+
+    private var status: String {
+        switch updates.state {
+        case .idle: "Version \(Self.version)"
+        case .checking: "Checking…"
+        case .upToDate: "Version \(Self.version) is the latest."
+        case .available(let release): "Version \(release.version) is available."
+        case .installing: "Downloading and installing; it restarts by itself."
+        case .checkFailed: "Couldn't reach GitHub. Check your connection."
+        case .installFailed(let reason): "\(reason) You can download it instead."
+        }
+    }
+
+    private static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
     }
 }
 

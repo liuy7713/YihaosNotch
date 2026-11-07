@@ -58,12 +58,22 @@ enum SingleInstance {
         let url = Bundle.main.bundleURL
         guard let onDisk = build(at: url), onDisk > runningBuild else { return false }
         log.info("build \(onDisk) replaced running build \(runningBuild); relaunching")
-        // A shell waits for this process to exit, then opens the bundle afresh. The pid
-        // and path are passed as arguments, never pasted into the script.
+        return relaunch()
+    }
+
+    /// Quits and starts the bundle on disk afresh, passing `arguments` to it. Returns
+    /// false, and carries on running, if that can't be arranged.
+    @discardableResult
+    static func relaunch(arguments: [String] = []) -> Bool {
+        // A shell waits for this process to exit, then opens the bundle. The pid, path
+        // and arguments are passed as arguments, never pasted into the script.
+        // `open -n`: LaunchServices still lists this copy as running for a moment after
+        // it exits, and a plain `open` in that moment does nothing.
         let relauncher = Process()
         relauncher.executableURL = URL(fileURLWithPath: "/bin/sh")
-        relauncher.arguments = ["-c", "while kill -0 \"$1\" 2>/dev/null; do sleep 0.1; done; exec /usr/bin/open \"$2\"",
-                                "sh", String(getpid()), url.path]
+        let script = #"pid="$1"; app="$2"; shift 2; while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done; "#
+            + #"if [ $# -gt 0 ]; then exec /usr/bin/open -n "$app" --args "$@"; else exec /usr/bin/open -n "$app"; fi"#
+        relauncher.arguments = ["-c", script, "sh", String(getpid()), Bundle.main.bundleURL.path] + arguments
         do {
             try relauncher.run()
         } catch {
@@ -116,7 +126,7 @@ enum SingleInstance {
 
     /// CFBundleVersion as currently on disk, read fresh rather than from the cached
     /// bundle.
-    private static func build(at bundleURL: URL) -> Int? {
+    nonisolated static func build(at bundleURL: URL) -> Int? {
         let plist = bundleURL.appendingPathComponent("Contents/Info.plist")
         guard let info = NSDictionary(contentsOf: plist) else { return nil }
         return (info["CFBundleVersion"] as? String).flatMap { Int($0) }

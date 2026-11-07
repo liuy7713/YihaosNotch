@@ -140,12 +140,6 @@ enum LyricsFetcher {
         ])
     }
 
-    /// LRCLIB asks clients to identify themselves by name, version and homepage.
-    private static let userAgent: String = {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
-        return "YihaosNotch/\(version) (https://github.com/liuy7713/YihaosNotch)"
-    }()
-
     private static func request<T: Decodable>(path: String, query: [URLQueryItem]) async -> Response<T> {
         var components = URLComponents(string: "https://lrclib.net")!
         components.path = path
@@ -155,7 +149,7 @@ enum LyricsFetcher {
             .replacingOccurrences(of: "+", with: "%2B")
         guard let url = components.url else { return .failed }
         var request = URLRequest(url: url, timeoutInterval: 8)
-        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(Network.userAgent, forHTTPHeaderField: "User-Agent")
         guard let (data, response) = try? await Network.data(for: request, limit: 1_000_000),
               let status = (response as? HTTPURLResponse)?.statusCode
         else { return .failed }

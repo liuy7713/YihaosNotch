@@ -96,6 +96,7 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--preview-settings` | Opens Settings at launch. |
 | `--preview-welcome N` | Shows the welcome screen at page N (0–2), even if it has been finished. |
 | `--preview-hud` | Cycles the volume, brightness, headphone and charging indicators (charging shows the real power state). The real volume and brightness are untouched. |
+| `--update-feed URL` | Reads the release description from URL (a copy of GitHub's `releases/latest` JSON) instead of GitHub, checks two seconds after launch, and accepts the image from any address; the signature check still applies, so only a build signed with your identity installs. Logs the permission state at launch (category Updater), for checking an update keeps it. |
 
 The media-key handling logs to the unified log:
 `log stream --predicate 'subsystem == "com.yihao.YihaosNotch"' --level debug`.
@@ -129,5 +130,6 @@ control the real Music app. Window behaviour is checked by eye with the flags ab
 | `Features/Camera` | Mirror; the camera runs only while it's visible |
 | `Features/System` | Volume/brightness keys (event tap, opt-in), headphone connection |
 | `Features/Timer` | Countdown timer, opened from the header clock |
+| `Features/Update` | Daily check of GitHub's latest release; installs it by swapping the bundle after checking the image's SHA-256 and that it's signed by the same certificate |
 | `Settings/` | Settings window |
 | `Onboarding/` | First-launch welcome: what it is, how to open it, permissions one at a time |

@@ -217,10 +217,11 @@ The welcome screen takes it from there. You'll need an administrator account for
 3, and to repeat steps 2-4 for each new version. It works on MacBooks with a notch
 running macOS 15 or later.
 
-Updating: drag the new version into Applications as before, replacing the old one,
-then open it. If it says "Not Opened", repeat steps 2-4. Versions before 1.3.2 don't
-notice an update while they're running: if the notch still shows the old version,
-right-click the gear in the notch, choose Quit, and open the app again.
+Updating: from version 1.6.0 the app updates itself. It checks once a day; when a
+new version is out, a dot appears on the gear in the notch, and Settings > General
+has an Update button. It installs and restarts by itself, with no "Not Opened" this
+time. From an older version, drag the new one into Applications as before, replacing
+the old one, then open it (repeat steps 2-4 if it says "Not Opened").
 
 Only download it from https://github.com/liuy7713/YihaosNotch/releases: copies from
 anywhere else aren't mine. Free and open source under the MIT licence.

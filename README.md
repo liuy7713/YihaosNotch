@@ -26,10 +26,13 @@ Only download it from this repository's
 anywhere else aren't mine. Each release lists the file's SHA-256, so you can check
 yours with `shasum -a 256 ~/Downloads/YihaosNotch.dmg`.
 
-**Updating:** download the new version, drag it over the old one in Applications, and
-open it. If macOS says "Not Opened" again, repeat steps 2–3. To hear about new
-versions, click **Watch › Custom › Releases** at the top of this page (needs a GitHub
-account).
+**Updating:** from version 1.6.0 the app looks for new versions once a day. When one
+is out, a small dot appears on the gear in the panel, and Settings offers **Update**:
+it downloads the new version, checks it's signed by the same developer, replaces
+itself and restarts, with no Open Anyway this time. (If it can't, for example from an
+account without permission to change Applications, the button opens this page
+instead.) On an older version, download the new one, drag it over the old one in
+Applications, open it, and repeat steps 2–3 if macOS says "Not Opened".
 
 ## What it does
 
@@ -92,11 +95,13 @@ can be skipped; a skipped one is asked for when its feature is first used.
 
 ## Privacy
 
-Only two things go over the network. Lyrics lookups send the title, artist, album and
-length of the current track to [LRCLIB](https://lrclib.net), a free lyrics database;
-turning off Synced lyrics in Settings stops them. And when Spotify is playing, its
-album art is downloaded from Spotify's own image servers (the address Spotify reports).
-There are no analytics.
+Only three things go over the network. Lyrics lookups send the title, artist, album
+and length of the current track to [LRCLIB](https://lrclib.net), a free lyrics
+database; turning off Synced lyrics in Settings stops them. When Spotify is playing,
+its album art is downloaded from Spotify's own image servers (the address Spotify
+reports). And once a day the app asks GitHub for this repository's latest release,
+which sends nothing about you; turning off Check for updates daily stops it, and an
+update downloads only when you click Update. There are no analytics.
 
 Display brightness has no public API, so it's set through Apple's private
 DisplayServices framework (as MonitorControl and similar tools do). If that ever stops

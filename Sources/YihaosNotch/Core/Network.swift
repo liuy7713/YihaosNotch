@@ -1,6 +1,12 @@
 import Foundation
 
 enum Network {
+    /// Name, version and homepage, as LRCLIB (and GitHub) ask clients to identify themselves.
+    static let userAgent: String = {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+        return "YihaosNotch/\(version) (https://github.com/liuy7713/YihaosNotch)"
+    }()
+
     /// One in-memory session for lyrics and artwork. Ephemeral, so responses (which
     /// together amount to a listening history) are never written to the disk cache.
     static let session: URLSession = {
