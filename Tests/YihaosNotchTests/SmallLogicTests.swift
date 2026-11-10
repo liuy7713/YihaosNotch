@@ -54,3 +54,17 @@ struct SingleInstanceTests {
         #expect(WelcomePermissions.isDiskImagePath(path) == onDiskImage)
     }
 }
+
+/// Who sees the welcome or the tour at launch.
+struct WelcomeGatingTests {
+    @Test func updatersSeeTheTourAgain() {
+        // New installs: the whole welcome.
+        #expect(AppSettings.needsWelcome(completed: 0))
+        // Finished the welcome in 1.5 or 1.6 (they saved 1): the tour again.
+        #expect(AppSettings.needsWelcome(completed: 1))
+        // Finished this version's tour: nothing.
+        #expect(!AppSettings.needsWelcome(completed: AppSettings.welcomeVersion))
+        // 1.7 added converting to the tour, so it must be above what 1.6 saved.
+        #expect(AppSettings.welcomeVersion >= 2)
+    }
+}

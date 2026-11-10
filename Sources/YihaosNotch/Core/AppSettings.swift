@@ -92,11 +92,15 @@ final class AppSettings {
     }
 
     /// 2: the tour gained converting.
-    static let welcomeVersion = 2
-    var needsWelcome: Bool { welcomeCompleted < Self.welcomeVersion }
+    nonisolated static let welcomeVersion = 2
+    var needsWelcome: Bool { Self.needsWelcome(completed: welcomeCompleted) }
     /// Never finished any welcome: permissions haven't been asked for yet. (Someone
     /// who finished an older one sees only the tour again.)
     var isFirstRun: Bool { welcomeCompleted == 0 }
+
+    /// Every release before 1.7 saved 1 on finishing the welcome (or 0 before it was
+    /// ever finished): updaters from those see the tour again.
+    nonisolated static func needsWelcome(completed: Int) -> Bool { completed < welcomeVersion }
     func completeWelcome() { welcomeCompleted = Self.welcomeVersion }
 
     private init() {
