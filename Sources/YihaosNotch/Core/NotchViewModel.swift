@@ -19,6 +19,11 @@ enum LiveActivity: Equatable {
     case headphones(name: String, symbol: String)
     case timer
     case timerDone
+    /// Files converting while the panel is closed, 0–1.
+    case converting(progress: Double)
+    /// A conversion just finished (or failed) out of sight.
+    /// Converting ended: how many files were made, out of how many.
+    case converted(count: Int, total: Int)
 
     /// Stable identity for animations, ignoring the changing payload.
     var kind: String {
@@ -32,6 +37,8 @@ enum LiveActivity: Equatable {
         case .headphones(let name, _): "headphones-\(name)"
         case .timer: "timer"
         case .timerDone: "timerDone"
+        case .converting: "converting"
+        case .converted: "converted"
         }
     }
 }
@@ -59,12 +66,15 @@ final class NotchViewModel {
     private let nowPlaying: NowPlayingService
     private let calendar: CalendarService
     private let timer: TimerService
+    private let convert: ConvertService
 
-    init(settings: AppSettings, nowPlaying: NowPlayingService, calendar: CalendarService, timer: TimerService) {
+    init(settings: AppSettings, nowPlaying: NowPlayingService, calendar: CalendarService, timer: TimerService,
+         convert: ConvertService) {
         self.settings = settings
         self.nowPlaying = nowPlaying
         self.calendar = calendar
         self.timer = timer
+        self.convert = convert
     }
 
     /// The highest-priority activity right now: brief events (power, volume,
@@ -79,8 +89,13 @@ final class NotchViewModel {
             event = .event(title: item.title, start: item.start, color: item.color)
             eventIsStarting = Self.startingWindow.contains(item.start.timeIntervalSince(calendar.now))
         }
+        var converting: Double?
+        if case .converting(_, let done, let total, let fraction) = convert.phase {
+            converting = (Double(done) + min(max(fraction, 0), 1)) / Double(max(total, 1))
+        }
         return Self.prioritise(transient: transient,
                                timerDone: timerDone,
+                               converting: converting,
                                timerRunning: timer.isActive,
                                hasTrack: settings.showMusicActivity && nowPlaying.track != nil,
                                isPlaying: nowPlaying.isPlaying,
@@ -94,7 +109,8 @@ final class NotchViewModel {
     static let startingWindow: ClosedRange<TimeInterval> = -120...60
 
     /// The priority rules on their own, so they can be checked without live services.
-    static func prioritise(transient: LiveActivity?, timerDone: Bool = false, timerRunning: Bool, hasTrack: Bool,
+    static func prioritise(transient: LiveActivity?, timerDone: Bool = false, converting: Double? = nil,
+                           timerRunning: Bool, hasTrack: Bool,
                            isPlaying: Bool, recentlyPlayed: Bool, event: LiveActivity?,
                            eventIsStarting: Bool = false) -> LiveActivity? {
         if let transient { return transient }
@@ -102,6 +118,8 @@ final class NotchViewModel {
         // Otherwise music played all day, or a focus timer, would hide the countdown at
         // exactly the moment it's for.
         if let event, eventIsStarting { return event }
+        // Shows that a conversion carries on after the panel closed.
+        if let converting { return .converting(progress: converting) }
         if timerRunning { return .timer }
         // A playing track keeps the wings; the event countdown waits until it pauses or stops.
         if hasTrack, isPlaying { return .music }
@@ -161,7 +179,7 @@ final class NotchViewModel {
             let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
             let textWidth = (name as NSString).size(withAttributes: [.font: font]).width
             return min(max(textWidth.rounded(.up) + 16, 40), 110)
-        case .timer:
+        case .timer, .converting, .converted:
             return 48
         case .charging:
             return CompactActivityView.chargingWingWidth

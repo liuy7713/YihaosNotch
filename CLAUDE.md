@@ -19,6 +19,11 @@ that aren't obvious from the code.
   `scripts/publish-release.sh NOTES.md` (GitHub Release; the notes say what's new in
   words for people using the app). Keep only the latest DMG in `dist/`.
 - `notes/` (reviews) is git-ignored on purpose.
+- A release with a new feature people need to learn (a new gesture, a new thing in the
+  panel) also teaches it: add a tip and a scene to the tour (`HowToPage` in
+  WelcomeView.swift, `NotchDemo`), and raise `AppSettings.welcomeVersion`, so everyone
+  who updates sees the tour again at launch (they skip the permissions; first-time
+  users get the whole welcome). Small fixes and tweaks don't.
 
 ## Invariants
 - Nothing asks for a permission at launch or before the welcome is finished. Each

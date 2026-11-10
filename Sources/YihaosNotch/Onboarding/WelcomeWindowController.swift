@@ -25,13 +25,13 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
     /// it's already open, it's just brought forward where it is.
     func show(page: Int = WelcomeView.previewPage) {
         if window == nil, let makeView {
-            let permissions = WelcomePermissions(firstRun: settings?.needsWelcome ?? true)
+            let permissions = WelcomePermissions(firstRun: settings?.isFirstRun ?? true)
             let hosting = NSHostingController(rootView: makeView(page, permissions) { [weak self] in self?.window?.close() })
             // Sized here, once, so it can be placed: sized by SwiftUI after it appears,
             // it was placed while tiny and then grew off to one side.
             hosting.sizingOptions = []
             let window = EscapeClosingWindow(contentViewController: hosting)
-            window.closesFromKeyboard = !(settings?.needsWelcome ?? true)
+            window.closesFromKeyboard = !(settings?.isFirstRun ?? true)
             window.title = "Welcome to Yihao's Notch"
             window.styleMask = [.titled, .closable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true

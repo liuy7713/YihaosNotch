@@ -59,11 +59,20 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
 
 /// An invisible window matched to the closed notch's visible shape (see
 /// `NotchController.updateGesturePanel`). It receives trackpad scrolls and clicks on
-/// the notch and its wings, so they never fall through to hidden menu-bar items.
+/// the notch and its wings, so they never fall through to hidden menu-bar items, and
+/// files dragged onto the notch.
 final class NotchGesturePanel: NSPanel {
+    /// Handlers for files dragged onto the closed notch: each returns whether it
+    /// takes them.
+    struct FileDrop {
+        let entered: @MainActor ([URL]) -> Bool
+        let dropped: @MainActor ([URL]) -> Bool
+    }
+
     init(onCrossing: @escaping @MainActor () -> Void,
          onScroll: @escaping @MainActor (NSEvent) -> Void,
-         onClick: @escaping @MainActor () -> Void) {
+         onClick: @escaping @MainActor () -> Void,
+         fileDrop: FileDrop) {
         super.init(contentRect: .zero,
                    styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered,
@@ -77,7 +86,7 @@ final class NotchGesturePanel: NSPanel {
         isMovable = false
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
-        contentView = GestureView(onCrossing: onCrossing, onScroll: onScroll, onClick: onClick)
+        contentView = GestureView(onCrossing: onCrossing, onScroll: onScroll, onClick: onClick, fileDrop: fileDrop)
     }
 
     override var canBecomeKey: Bool { false }
@@ -87,14 +96,21 @@ final class NotchGesturePanel: NSPanel {
         let onCrossing: @MainActor () -> Void
         let onScroll: @MainActor (NSEvent) -> Void
         let onClick: @MainActor () -> Void
+        let fileDrop: FileDrop
+        private var accepting = false
 
         init(onCrossing: @escaping @MainActor () -> Void,
              onScroll: @escaping @MainActor (NSEvent) -> Void,
-             onClick: @escaping @MainActor () -> Void) {
+             onClick: @escaping @MainActor () -> Void,
+             fileDrop: FileDrop) {
             self.onCrossing = onCrossing
             self.onScroll = onScroll
             self.onClick = onClick
+            self.fileDrop = fileDrop
             super.init(frame: .zero)
+            // Only file drags: windows, text and links passing over the notch are
+            // ignored, as before. Costs nothing until a file drag reaches the notch.
+            registerForDraggedTypes([.fileURL])
             // While the pointer is over this window, global monitors stop seeing its
             // movement, so report entering, leaving and moving here instead. Moves only
             // flow while the pointer is over this small window.
@@ -111,5 +127,28 @@ final class NotchGesturePanel: NSPanel {
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func scrollWheel(with event: NSEvent) { onScroll(event) }
         override func mouseDown(with event: NSEvent) { onClick() }
+
+        override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+            accepting = fileDrop.entered(Self.files(sender))
+            return accepting ? .copy : []
+        }
+
+        override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+            accepting ? .copy : []
+        }
+
+        override func draggingExited(_ sender: NSDraggingInfo?) {
+            accepting = false
+        }
+
+        override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+            defer { accepting = false }
+            return fileDrop.dropped(Self.files(sender))
+        }
+
+        private static func files(_ sender: NSDraggingInfo) -> [URL] {
+            sender.draggingPasteboard.readObjects(forClasses: [NSURL.self],
+                                                  options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        }
     }
 }

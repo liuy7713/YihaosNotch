@@ -61,6 +61,33 @@ fingers), it shows:
   you move) on cameras that have it, such as recent MacBooks' 12 MP camera, toggled from a
   button in the mirror.
 
+**Converting files**: drag a file onto the notch and it opens with the formats that
+file can become; one click converts. The result goes to Downloads (or next to the
+original, or a folder of your choice, in Settings), never replacing anything, with
+Show in Finder and Undo, and you can drag it straight out of the notch into an email
+or upload. It all happens on your Mac; nothing is uploaded.
+
+| Drop | Get |
+|---|---|
+| Photos (HEIC, JPEG, PNG, WebP, AVIF, RAW and more) | JPEG, PNG, HEIC, or a PDF (several photos make one PDF) |
+| PDF | PNG or JPEG of each page, its text, or a smaller PDF; several PDFs merge into one |
+| Word, RTF, OpenDocument, HTML or text | PDF, Word or plain text |
+| Markdown | PDF, Word or HTML |
+| Video (MOV, MP4, M4V, MKV) | MP4, or just its sound as M4A |
+| Audio (MP3, M4A, WAV, FLAC, AIFF) | M4A or WAV |
+
+With Microsoft Word installed, PDF and Word versions of documents are made by Word,
+so they look exactly as Word prints them; without it, macOS's own text system makes
+them (text, fonts and tables come through, Word's exact page layout doesn't). macOS
+can't create MP3 or WebP files, so those aren't offered. MKV videos are copied into an
+MP4 without re-encoding the picture, so it's quick and loses nothing; that works for
+H.264 and HEVC video (most MKVs), not VP9 or AV1. 5.1 sound in FLAC or Opus can't be
+converted, so those videos come out without sound (and say so). Drop several files at once to convert
+them all to the same format; more than five are saved together in one folder, such as
+"Converted to JPEG". Files that can't become the same format (photos and videos, say)
+have to be dropped separately, and the notch says so. Location data is removed from
+converted photos unless you turn that off.
+
 Optionally, the volume and brightness keys show a small indicator in the notch instead
 of the macOS pop-up (in the header while the panel is open).
 
@@ -91,11 +118,14 @@ can be skipped; a skipped one is asked for when its feature is first used.
 | Calendars | Showing your events and meeting links. Read-only. |
 | Camera | The mirror. The camera runs only while the mirror is on screen. |
 | Automation (Music, Spotify) | Reading what's playing and controlling playback. |
+| Automation (Microsoft Word) | Only when you convert a document with Word installed. Word also asks once for access to the folder it works in (`~/Library/Caches/com.yihao.YihaosNotch/Word`). Turn off "Use Microsoft Word for documents" in Settings to never ask. |
+| Downloads folder | macOS asks the first time a converted file is saved there (or into Desktop or Documents, if you choose those). |
+| Data from other apps | macOS asks the first time you drop a file that another app keeps in its own storage (a photo dragged out of WeChat, say). |
 | Accessibility | Only for the optional volume/brightness indicator, which needs to catch those keys before macOS does. Off by default. A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on, and only while an external keyboard is connected (anything that presents itself as one counts, such as some mouse receivers, security keys or Karabiner's virtual keyboard), the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. Settings says so too. |
 
 ## Privacy
 
-Only three things go over the network. Lyrics lookups send the title, artist, album
+Converting files happens entirely on your Mac. Only three things go over the network. Lyrics lookups send the title, artist, album
 and length of the current track to [LRCLIB](https://lrclib.net), a free lyrics
 database; turning off Synced lyrics in Settings stops them. When Spotify is playing,
 its album art is downloaded from Spotify's own image servers (the address Spotify

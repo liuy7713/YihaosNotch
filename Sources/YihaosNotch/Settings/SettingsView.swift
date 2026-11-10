@@ -109,6 +109,34 @@ struct SettingsView: View {
                 }
             }
 
+            Section {
+                Toggle("Convert files dropped on the notch", isOn: $settings.convertDropEnabled)
+                Picker("Save converted files to", selection: saveChoice) {
+                    Text("Downloads").tag(SaveChoice.downloads)
+                    Text("Same folder as the original").tag(SaveChoice.original)
+                    if !settings.convertFolder.isEmpty {
+                        Text(FileManager.default.displayName(atPath: settings.convertFolder)).tag(SaveChoice.folder)
+                    }
+                    Divider()
+                    Text("Other Folder…").tag(SaveChoice.choose)
+                }
+                .disabled(!settings.convertDropEnabled)
+                Toggle("Remove location from photos", isOn: $settings.convertStripLocation)
+                    .disabled(!settings.convertDropEnabled)
+                if WordAutomation.isInstalled {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("Use Microsoft Word for documents", isOn: $settings.convertUseWord)
+                        Caption("Word lays PDFs out exactly as it prints them. macOS and Word each ask once, the first time.")
+                    }
+                    .disabled(!settings.convertDropEnabled)
+                }
+            } header: {
+                Text("Converting")
+            } footer: {
+                Caption("Drop photos, PDFs, Word or Markdown documents, video or audio on the notch. It all happens on this Mac; nothing is uploaded.")
+                    .padding(.leading, 10)
+            }
+
             Section("In the notch") {
                 Toggle("Music while it's playing", isOn: $settings.showMusicActivity)
                 Toggle("Charging and low battery", isOn: $settings.showBatteryActivity)
@@ -163,6 +191,38 @@ struct SettingsView: View {
     }
 
     static let width: CGFloat = 480
+
+    private enum SaveChoice: Hashable { case downloads, original, folder, choose }
+
+    private var saveChoice: Binding<SaveChoice> {
+        Binding {
+            switch settings.convertSaveLocation {
+            case .downloads: .downloads
+            case .original: .original
+            case .folder: settings.convertFolder.isEmpty ? .downloads : .folder
+            }
+        } set: { choice in
+            switch choice {
+            case .downloads: settings.convertSaveLocation = .downloads
+            case .original: settings.convertSaveLocation = .original
+            case .folder: settings.convertSaveLocation = .folder
+            case .choose: chooseFolder()
+            }
+        }
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Choose where converted files are saved."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        settings.convertFolder = url.path
+        settings.convertSaveLocation = .folder
+    }
 
     private var calendarsSummary: String {
         let shown = calendar.calendars.filter { !settings.hiddenCalendars.contains($0.id) }.count

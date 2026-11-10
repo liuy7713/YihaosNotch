@@ -65,6 +65,25 @@ final class AppSettings {
     var cameraCenterStage: Bool {
         didSet { defaults.set(cameraCenterStage, forKey: Key.centerStage) }
     }
+    /// Files dragged onto the notch open it, to be converted.
+    var convertDropEnabled: Bool {
+        didSet { defaults.set(convertDropEnabled, forKey: Key.convertDrop) }
+    }
+    var convertSaveLocation: SaveLocation {
+        didSet { defaults.set(convertSaveLocation.rawValue, forKey: Key.convertSave) }
+    }
+    /// The folder for `SaveLocation.folder`, as a path.
+    var convertFolder: String {
+        didSet { defaults.set(convertFolder, forKey: Key.convertFolder) }
+    }
+    /// Converted photos leave out where they were taken.
+    var convertStripLocation: Bool {
+        didSet { defaults.set(convertStripLocation, forKey: Key.convertStripLocation) }
+    }
+    /// Documents go through Microsoft Word when it's installed.
+    var convertUseWord: Bool {
+        didSet { defaults.set(convertUseWord, forKey: Key.convertWord) }
+    }
     /// The version of the welcome screen last finished. It shows at launch while this is
     /// behind `Self.welcomeVersion`; raise that when the welcome gains something worth
     /// seeing again.
@@ -72,8 +91,12 @@ final class AppSettings {
         didSet { defaults.set(welcomeCompleted, forKey: Key.welcome) }
     }
 
-    static let welcomeVersion = 1
+    /// 2: the tour gained converting.
+    static let welcomeVersion = 2
     var needsWelcome: Bool { welcomeCompleted < Self.welcomeVersion }
+    /// Never finished any welcome: permissions haven't been asked for yet. (Someone
+    /// who finished an older one sees only the tour again.)
+    var isFirstRun: Bool { welcomeCompleted == 0 }
     func completeWelcome() { welcomeCompleted = Self.welcomeVersion }
 
     private init() {
@@ -93,6 +116,10 @@ final class AppSettings {
             Key.lyrics: true,
             Key.customTimer: TimerDurations.defaultCustom,
             Key.updates: true,
+            Key.convertDrop: true,
+            Key.convertSave: SaveLocation.downloads.rawValue,
+            Key.convertStripLocation: true,
+            Key.convertWord: true,
         ])
         openTrigger = OpenTrigger(rawValue: d.string(forKey: Key.openTrigger) ?? "") ?? .hover
         hoverDelay = d.double(forKey: Key.hoverDelay)
@@ -109,6 +136,11 @@ final class AppSettings {
         customTimerMinutes = min(max(d.integer(forKey: Key.customTimer), 1), TimerService.maxMinutes)
         hiddenCalendars = Set(d.stringArray(forKey: Key.hiddenCalendars) ?? [])
         checkForUpdates = d.bool(forKey: Key.updates)
+        convertDropEnabled = d.bool(forKey: Key.convertDrop)
+        convertSaveLocation = SaveLocation(rawValue: d.string(forKey: Key.convertSave) ?? "") ?? .downloads
+        convertFolder = d.string(forKey: Key.convertFolder) ?? ""
+        convertStripLocation = d.bool(forKey: Key.convertStripLocation)
+        convertUseWord = d.bool(forKey: Key.convertWord)
     }
 
     private enum Key {
@@ -127,5 +159,10 @@ final class AppSettings {
         static let customTimer = "customTimerMinutes"
         static let hiddenCalendars = "hiddenCalendars"
         static let updates = "checkForUpdates"
+        static let convertDrop = "convertDropEnabled"
+        static let convertSave = "convertSaveLocation"
+        static let convertFolder = "convertFolder"
+        static let convertStripLocation = "convertStripLocation"
+        static let convertWord = "convertUseWord"
     }
 }

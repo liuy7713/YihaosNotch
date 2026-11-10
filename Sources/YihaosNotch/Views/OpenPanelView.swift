@@ -9,6 +9,7 @@ struct OpenPanelView: View {
     @Environment(CalendarService.self) private var calendar
     @Environment(TimerService.self) private var timer
     @Environment(UpdateService.self) private var updates
+    @Environment(ConvertService.self) private var convert
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum RightMode { case camera, timer, calendar, clock }
@@ -22,6 +23,40 @@ struct OpenPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            ZStack {
+                if showsCards {
+                    cards.transition(.contentSwap(reduceMotion: reduceMotion))
+                } else {
+                    ConvertPanel()
+                        .padding(.horizontal, 22)
+                        .padding(.top, 12)
+                        .padding(.bottom, 20)
+                        .transition(.contentSwap(reduceMotion: reduceMotion))
+                }
+            }
+            .animation(Theme.swapAnimation(reduceMotion: reduceMotion), value: showsCards)
+        }
+        // Files dragged in take over from the camera or timer.
+        .onChange(of: convert.phase) { _, phase in
+            // Files dragged in, or a result arriving, take over from the camera or
+            // timer, so closing the result goes back to the usual cards.
+            if phase != .idle, !convert.isConverting {
+                model.showingCamera = false
+                model.showingTimer = false
+            }
+        }
+        // Files dragged onto the open panel (see also NotchGesturePanel for the closed notch).
+        .onDrop(of: [.fileURL], delegate: ConvertDropDelegate(convert: convert))
+    }
+
+    /// The usual cards, unless files are being converted; the camera or timer can
+    /// still be opened over a conversion that's running.
+    private var showsCards: Bool {
+        convert.phase == .idle || (convert.isConverting && (model.showingCamera || model.showingTimer))
+    }
+
+    /// Now Playing on the left, and the calendar, camera or timer on the right.
+    private var cards: some View {
             HStack(alignment: .top, spacing: 18) {
                 // 300 + 37 (gap and divider) leaves 259 for the calendar: five 52 pt days,
                 // and room for event titles beside the Join button.
@@ -41,7 +76,6 @@ struct OpenPanelView: View {
             .padding(.horizontal, 22)
             .padding(.top, 12)
             .padding(.bottom, 20)
-        }
     }
 
     // Nothing may be drawn in the middle: the hardware notch covers it.
@@ -72,6 +106,7 @@ struct OpenPanelView: View {
 
             HStack(spacing: 4) {
                 HeaderIconButton(systemName: "web.camera.fill", label: "Camera mirror", active: model.showingCamera) {
+                    convert.dismiss()
                     model.showingCamera.toggle()
                     model.showingTimer = false
                 }
@@ -195,10 +230,12 @@ private struct ClockButton: View {
 
     @Environment(NotchViewModel.self) private var model
     @Environment(TimerService.self) private var timer
+    @Environment(ConvertService.self) private var convert
     @State private var hovering = false
 
     var body: some View {
         Button {
+            convert.dismiss()
             model.showingTimer.toggle()
             model.showingCamera = false
         } label: {

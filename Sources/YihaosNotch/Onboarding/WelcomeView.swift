@@ -40,7 +40,7 @@ struct WelcomeView: View {
             ZStack {
                 switch page {
                 case 0: HelloPage()
-                case 1: HowToPage()
+                case 1: HowToPage(returning: !settings.isFirstRun)
                 default: PermissionsPage(settings: settings, calendar: calendar,
                                          mediaKeys: mediaKeys, permissions: permissions)
                 }
@@ -75,7 +75,7 @@ struct WelcomeView: View {
                     .buttonStyle(WelcomeTextButtonStyle())
             }
             // Reopened from Settings, it's just being looked at again.
-            let finishTitle = settings.needsWelcome ? "Start Using Yihao's Notch" : "Done"
+            let finishTitle = settings.isFirstRun ? "Start Using Yihao's Notch" : "Done"
             Button(isLastPage ? finishTitle : "Continue") {
                 if isLastPage { onFinish() } else { go(to: page + 1) }
             }
@@ -186,6 +186,8 @@ private struct HelloPage: View {
 }
 
 private struct HowToPage: View {
+    /// Someone updating: show what's new first.
+    let returning: Bool
     @State private var activeTip = 0
 
     var body: some View {
@@ -193,8 +195,8 @@ private struct HowToPage: View {
             PageTitle("It lives in the notch",
                       subtitle: "Quiet until something's happening. Open it whenever you like.")
             HStack(alignment: .center, spacing: 30) {
-                NotchDemo(activeTip: $activeTip)
-                VStack(alignment: .leading, spacing: 18) {
+                NotchDemo(activeTip: $activeTip, startsWithNew: returning)
+                VStack(alignment: .leading, spacing: 14) {
                     Tip(symbol: "bell", title: "It speaks up on its own",
                         detail: "What's playing, your next meeting, a running timer or your charger. Turn any of them off in Settings.",
                         isActive: activeTip == 0)
@@ -204,6 +206,9 @@ private struct HowToPage: View {
                     Tip(symbol: "cursorarrow.rays", title: "Click around the panel",
                         detail: "The clock starts a timer, the camera shows a mirror, and the gear opens Settings and Quit.",
                         isActive: activeTip == 2)
+                    Tip(symbol: "arrow.down.doc", title: "Drop files on it to convert",
+                        detail: "HEIC to JPEG, Word or Markdown to PDF, MOV to MP4 and more. Saved to Downloads.",
+                        isActive: activeTip == 3)
                 }
                 .frame(width: 250, alignment: .leading)
             }

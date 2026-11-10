@@ -70,6 +70,15 @@ struct CompactActivityView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.today)
                 .symbolEffect(.bounce, options: .repeat(2))
+        case .converting:
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.primary)
+                .symbolEffect(.rotate, options: .repeat(.continuous))
+        case .converted(let count, let total):
+            Image(systemName: count < total ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(count == 0 ? Theme.low : count < total ? Color.yellow : Theme.charge)
         }
     }
 
@@ -125,6 +134,18 @@ struct CompactActivityView: View {
             Text("Done")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.primary)
+        case .converting(let progress):
+            Text("\(Int((min(max(progress, 0), 1) * 100).rounded()))%")
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                .foregroundStyle(Theme.primary)
+                .contentTransition(.numericText())
+        case .converted(let count, let total):
+            // "Failed", "3 of 4", "4 done", "Done".
+            Text(count == 0 ? "Failed" : count < total ? "\(count) of \(total)" : count > 1 ? "\(count) done" : "Done")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
     }
 

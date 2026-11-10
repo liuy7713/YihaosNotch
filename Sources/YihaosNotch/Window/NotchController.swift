@@ -10,11 +10,14 @@ import SwiftUI
 @MainActor
 final class NotchController {
     var onOpen: (() -> Void)?
+    /// Called whenever the panel closes.
+    var onClose: (() -> Void)?
     /// Called as the user steps away (see `userLeft`).
     var onUserLeft: (() -> Void)?
 
     private let viewModel: NotchViewModel
     private let settings: AppSettings
+    private let convert: ConvertService
     private let content: AnyView
     private var panel: NotchPanel?
     private var gesturePanel: NotchGesturePanel?
@@ -24,6 +27,7 @@ final class NotchController {
     private var observers: [NSObjectProtocol] = []
     private var armTask: Task<Void, Never>?
     private var closeTask: Task<Void, Never>?
+    private var staleHoverCheck: Task<Void, Never>?
     private var safetyTimer: Timer?
     /// Global mouse-move monitor, installed only while armed or open. When closed,
     /// the gesture window's tracking area reports the pointer reaching the notch, so
@@ -65,9 +69,10 @@ final class NotchController {
     private let sidePadding: CGFloat = 10
     private let bottomPadding: CGFloat = 14
 
-    init(viewModel: NotchViewModel, settings: AppSettings, content: AnyView) {
+    init(viewModel: NotchViewModel, settings: AppSettings, convert: ConvertService, content: AnyView) {
         self.viewModel = viewModel
         self.settings = settings
+        self.convert = convert
         self.content = content
     }
 
@@ -175,7 +180,9 @@ final class NotchController {
             let p = NotchGesturePanel(
                 onCrossing: { [weak self] in self?.pointerMoved() },
                 onScroll: { [weak self] event in self?.scrolled(event) },
-                onClick: { [weak self] in self?.openFromClick() }
+                onClick: { [weak self] in self?.openFromClick() },
+                fileDrop: .init(entered: { [weak self] urls in self?.filesArrived(urls, dropped: false) ?? false },
+                                dropped: { [weak self] urls in self?.filesArrived(urls, dropped: true) ?? false })
             )
             self.gesturePanel = p
             return p
@@ -197,6 +204,7 @@ final class NotchController {
         viewModel.state = .closed
         viewModel.showingCamera = false
         panel?.ignoresMouseEvents = true
+        onClose?()
         // Stopped straight away: the mirror's own stop waits for the close animation,
         // which may not run until the display wakes.
         onUserLeft?()
@@ -211,6 +219,7 @@ final class NotchController {
         viewModel.showingCamera = false
         viewModel.showingTimer = false
         panel?.ignoresMouseEvents = true
+        onClose?()
         panel?.orderOut(nil)
         gesturePanel?.orderOut(nil)
         screenFrame = .zero
@@ -282,13 +291,31 @@ final class NotchController {
             guard p.y > screenFrame.maxY - 60, closedHitRect.contains(p),
                   Date.now >= armSuppressedUntil
             else { return }
-            // Dragging a file or a selection past the notch shouldn't open it.
+            // Dragging a file or a selection past the notch doesn't open it by hovering;
+            // only a file that can be converted does, through the gesture window.
             guard NSEvent.pressedMouseButtons == 0 else { return }
             arm()
         case .arming:
             if !armedHitRect.contains(p) { disarm() }
         case .open:
-            if openHitRect.contains(p) {
+            // A drag that ended without a drop (Esc, or let go elsewhere) leaves the
+            // well. Checked again a moment later, since a real drop also starts with
+            // the button coming up.
+            if convert.phase == .hovering, NSEvent.pressedMouseButtons == 0, staleHoverCheck == nil {
+                staleHoverCheck = Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(400))
+                    guard let self else { return }
+                    self.staleHoverCheck = nil
+                    if self.convert.phase == .hovering, NSEvent.pressedMouseButtons == 0 { self.convert.endHover() }
+                }
+            }
+            // A result being dragged out keeps the panel open until it's let go,
+            // wherever the pointer wanders. A file being dragged in doesn't: one passing
+            // by on its way elsewhere lets the panel close as usual.
+            if NSEvent.pressedMouseButtons != 0, convert.phase == .finished {
+                closeTask?.cancel()
+                closeTask = nil
+            } else if openHitRect.contains(p) {
                 closeTask?.cancel()
                 closeTask = nil
             } else if closeTask == nil, !previewCycle, Date.now >= greetingUntil {
@@ -366,6 +393,15 @@ final class NotchController {
         stopPointerTracking()
     }
 
+    /// Files dragged onto the closed notch open it on the drop target, if they can be
+    /// converted; anything else is refused, so it doesn't open for every drag.
+    private func filesArrived(_ urls: [URL], dropped: Bool) -> Bool {
+        guard convert.reacts(to: urls), screenFrame != .zero else { return false }
+        if dropped { convert.stage(urls) } else { convert.hover(urls) }
+        open()
+        return true
+    }
+
     /// A click on the timer's wings opens on the timer; any other way in (hovering,
     /// swiping) opens on the calendar, so a long focus timer doesn't hide the agenda.
     private func openFromClick() {
@@ -405,6 +441,7 @@ final class NotchController {
         viewModel.state = .closed
         panel?.ignoresMouseEvents = true
         stopPointerTracking()
+        onClose?()
     }
 
     /// While armed or open: a global monitor follows the pointer over other apps, and

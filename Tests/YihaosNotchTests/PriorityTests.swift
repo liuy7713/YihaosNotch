@@ -7,10 +7,11 @@ import Testing
 struct PriorityTests {
     let event = LiveActivity.event(title: "Standup", start: Date(timeIntervalSince1970: 0), color: .blue)
 
-    func pick(transient: LiveActivity? = nil, done: Bool = false, timer: Bool = false, track: Bool = false,
-              playing: Bool = false, recent: Bool = false, event: LiveActivity? = nil,
+    func pick(transient: LiveActivity? = nil, done: Bool = false, converting: Double? = nil, timer: Bool = false,
+              track: Bool = false, playing: Bool = false, recent: Bool = false, event: LiveActivity? = nil,
               starting: Bool = false) -> LiveActivity? {
-        NotchViewModel.prioritise(transient: transient, timerDone: done, timerRunning: timer, hasTrack: track,
+        NotchViewModel.prioritise(transient: transient, timerDone: done, converting: converting,
+                                  timerRunning: timer, hasTrack: track,
                                   isPlaying: playing, recentlyPlayed: recent, event: event,
                                   eventIsStarting: starting)
     }
@@ -18,6 +19,11 @@ struct PriorityTests {
     @Test func aFlashBeatsEverything() {
         let volume = LiveActivity.volume(level: 0.5, muted: false)
         #expect(pick(transient: volume, timer: true, track: true, playing: true, recent: true, event: event) == volume)
+    }
+
+    @Test func convertingShowsOverATimerAndMusicButNotAStartingMeeting() {
+        #expect(pick(converting: 0.4, timer: true, track: true, playing: true) == .converting(progress: 0.4))
+        #expect(pick(converting: 0.4, event: event, starting: true) == event)
     }
 
     @Test func aRunningTimerBeatsMusicAndEvents() {

@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let mediaKeys = MediaKeyController()
     private let headphones = HeadphoneMonitor()
     private let updates = UpdateService()
+    private lazy var convert = ConvertService(settings: settings)
     private var viewModel: NotchViewModel!
     private var controller: NotchController?
 
@@ -24,7 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
-        viewModel = NotchViewModel(settings: settings, nowPlaying: nowPlaying, calendar: calendar, timer: timer)
+        viewModel = NotchViewModel(settings: settings, nowPlaying: nowPlaying, calendar: calendar, timer: timer,
+                                   convert: convert)
         SettingsWindowController.shared.configure(settings: settings, calendar: calendar, mediaKeys: mediaKeys,
                                                   updates: updates)
         WelcomeWindowController.shared.configure(settings: settings, calendar: calendar, mediaKeys: mediaKeys)
@@ -45,6 +47,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             viewModel?.flash(.headphones(name: name, symbol: symbol), seconds: 3)
         }
         timer.onFinish = { [viewModel] in viewModel?.showTimerDone() }
+        // Finished out of sight: a moment in the wings (the panel shows it when open).
+        convert.onFinish = { [viewModel] made, total in
+            guard let viewModel, viewModel.state != .open else { return }
+            viewModel.flash(.converted(count: made, total: total), seconds: 3.5)
+        }
 
         let root = NotchRootView()
             .environment(viewModel)
@@ -55,12 +62,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environment(camera)
             .environment(timer)
             .environment(updates)
+            .environment(convert)
 
-        let controller = NotchController(viewModel: viewModel, settings: settings, content: AnyView(root))
-        controller.onOpen = { [nowPlaying, calendar] in
+        let controller = NotchController(viewModel: viewModel, settings: settings, convert: convert,
+                                         content: AnyView(root))
+        controller.onOpen = { [nowPlaying, calendar, convert] in
             nowPlaying.refreshPosition()
             calendar.noteOpened()
+            convert.panelOpened()
         }
+        controller.onClose = { [convert] in convert.panelClosed() }
         controller.onUserLeft = { [camera] in camera.deactivate() }
         controller.start()
         self.controller = controller
@@ -74,7 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Until the welcome screen is done, nothing that would raise a permission prompt
         // runs: it asks for each one itself, with a reason. (Reading the players sends
         // them Apple events, which prompts.)
-        let welcoming = settings.needsWelcome
+        // Someone who finished an earlier welcome has already been asked; they only see
+        // the tour again.
+        let welcoming = settings.isFirstRun
         if !welcoming {
             nowPlaying.start()
             followUpdateSetting()
@@ -86,8 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         headphones.start()
         // Silent at launch: the permission prompt only ever comes from a toggle.
         if settings.replaceSystemHUD { mediaKeys.enable(prompt: false) }
-        if welcoming || CommandLine.arguments.contains("--preview-welcome") {
+        if CommandLine.arguments.contains("--preview-welcome") {
             WelcomeWindowController.shared.show()
+        } else if settings.needsWelcome {
+            WelcomeWindowController.shared.show(page: welcoming ? 0 : 1)
         }
         // Development aid: `--preview-settings` opens Settings at launch.
         if CommandLine.arguments.contains("--preview-settings") { SettingsWindowController.shared.show() }
@@ -125,9 +140,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func welcomeFinished() {
         guard settings.needsWelcome else { return }
+        let firstRun = settings.isFirstRun
         settings.completeWelcome()
-        nowPlaying.start()
-        followUpdateSetting()
+        if firstRun {
+            nowPlaying.start()
+            followUpdateSetting()
+        }
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(0.6))
             self?.controller?.greet()
@@ -138,8 +156,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `--preview-timer` starts a 25-minute timer and shows the timer view when the panel
     /// opens; `--preview-swap` (below); `--preview-hud` cycles the volume, brightness, headphone and charging indicators
     /// (the charging one shows the real power state) with sample values (the real volume and brightness are never touched).
+    /// `--preview-convert PATH` shows PATH as if it had been dropped on the notch (with
+    /// `--preview-open`, the panel stays open on it).
     private func runPreviewFlags() {
         let arguments = CommandLine.arguments
+        if let index = arguments.firstIndex(of: "--preview-convert"), index + 1 < arguments.count {
+            convert.stage([URL(fileURLWithPath: arguments[index + 1])])
+        }
         if arguments.contains("--preview-timer") {
             timer.start(minutes: 25)
             Task { [viewModel] in

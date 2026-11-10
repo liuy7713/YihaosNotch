@@ -29,7 +29,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Yihao's Notch reads what's playing in Music and Spotify and controls playback.</string>
+	<string>Yihao's Notch reads what's playing in Music and Spotify and controls playback, and asks Microsoft Word to convert documents you drop on the notch.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Yihao's Notch shows your upcoming events and lets you join meetings from the notch.</string>
 	<key>NSCameraUsageDescription</key>

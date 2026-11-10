@@ -4,10 +4,13 @@ import SwiftUI
 /// match the tips beside it (`activeTip` follows along so the right one lights up):
 /// 0. the closed notch speaks up on its own: music, a meeting countdown, charging;
 /// 1. resting the pointer opens it, then a two-finger swipe does;
-/// 2. in the open panel, the clock, camera and gear are clicked in turn.
+/// 2. in the open panel, the clock, camera and gear are clicked in turn;
+/// 3. a photo is dragged onto the notch, dropped, and turned into a JPEG.
 /// With Reduce Motion it's a still picture of the open panel.
 struct NotchDemo: View {
     @Binding var activeTip: Int
+    /// For people updating: the newest scene plays first, then the usual loop.
+    var startsWithNew = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isOpen = false
@@ -17,6 +20,10 @@ struct NotchDemo: View {
     @State private var pointerVisible = false
     @State private var fingersVisible = false
     @State private var fingersDown = false
+    @State private var convertStage: ConvertStage?
+    @State private var file = Spot.fileStart
+    @State private var fileVisible = false
+    @State private var chipPressed = false
 
     private let screenSize = CGSize(width: 280, height: 178)
     private let closedSize = CGSize(width: 62, height: 13)
@@ -24,6 +31,9 @@ struct NotchDemo: View {
     private let wingWidth: CGFloat = 30
 
     enum Wing { case music, meeting, charging }
+
+    /// The converting scene's panel: the drop well, the formats, then done.
+    enum ConvertStage { case drop, chips, done }
 
     /// The open panel's header controls, with their centres measured from the middle
     /// of the notch (the clock sits left of the hardware notch, the icons right of it).
@@ -44,6 +54,8 @@ struct NotchDemo: View {
     enum Spot: Equatable {
         case away, notch, leaving
         case item(HeaderItem)
+        /// Where the photo starts, and the JPEG button in the open panel.
+        case fileStart, chip
 
         var offset: CGSize {
             switch self {
@@ -51,8 +63,13 @@ struct NotchDemo: View {
             case .notch: CGSize(width: 4, height: 4)
             case .leaving: CGSize(width: -84, height: 128)
             case .item(let item): CGSize(width: item.x + 4, height: 12)
+            case .fileStart: CGSize(width: -78, height: 112)
+            case .chip: CGSize(width: Self.chipX + 4, height: Self.chipY + 6)
             }
         }
+
+        static let chipX: CGFloat = 8
+        static let chipY: CGFloat = 46
     }
 
     var body: some View {
@@ -69,6 +86,10 @@ struct NotchDemo: View {
 
             notch
             fingers
+            DemoFile()
+                .offset(CGSize(width: file.offset.width - 2, height: file.offset.height - 8))
+                .opacity(fileVisible ? 1 : 0)
+                .scaleEffect(fileVisible ? 1 : 0.6)
             Image(systemName: "cursorarrow")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(.white)
@@ -178,9 +199,81 @@ struct NotchDemo: View {
                     .transition(.scale(scale: 1.6).combined(with: .opacity))
             }
 
-            demoContent
-                .padding(.horizontal, 22)
-                .padding(.top, 25)
+            if let convertStage {
+                convertContent(convertStage)
+                    .transition(.opacity.animation(.easeOut(duration: 0.2)))
+            } else {
+                demoContent
+                    .padding(.horizontal, 22)
+                    .padding(.top, 25)
+                    .transition(.opacity.animation(.easeOut(duration: 0.2)))
+            }
+        }
+    }
+
+    /// The converting panel in miniature, laid out by offsets from the top middle so
+    /// the pointer can land on the JPEG button.
+    @ViewBuilder
+    private func convertContent(_ stage: ConvertStage) -> some View {
+        switch stage {
+        case .drop:
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Theme.tertiary, style: StrokeStyle(lineWidth: 0.8, dash: [3, 2.5]))
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Theme.fill))
+                .overlay {
+                    VStack(spacing: 2) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 9, weight: .medium))
+                        Text("Drop to convert")
+                            .font(.system(size: 6.5, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.primary)
+                }
+                .frame(width: 186, height: 50)
+                .offset(y: 23)
+        case .chips, .done:
+            ZStack(alignment: .top) {
+                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                    .fill(Self.artwork)
+                    .frame(width: 24, height: 24)
+                    .offset(x: -78, y: 30)
+                VStack(alignment: .leading, spacing: 4) {
+                    Capsule().fill(Theme.primary).frame(width: 34, height: 4)
+                    Capsule().fill(Theme.tertiary).frame(width: 24, height: 3)
+                }
+                .frame(width: 40, alignment: .leading)
+                .offset(x: -40, y: 36)
+                if stage == .chips {
+                    Text("Convert to")
+                        .font(.system(size: 5.5, weight: .semibold))
+                        .foregroundStyle(Theme.secondary)
+                        .frame(width: 60, alignment: .leading)
+                        .offset(x: Spot.chipX + 14, y: Spot.chipY - 16)
+                    HStack(spacing: 3) {
+                        ForEach(["JPEG", "PNG", "PDF"], id: \.self) { format in
+                            Text(format)
+                                .font(.system(size: 5.5, weight: .bold))
+                                .foregroundStyle(format == "JPEG" ? Color.black : Theme.primary)
+                                .frame(width: 20, height: 9)
+                                .background(Capsule().fill(format == "JPEG" ? Theme.primary : Theme.fillStrong))
+                                .scaleEffect(format == "JPEG" && chipPressed ? 0.85 : 1)
+                        }
+                    }
+                    .frame(width: 66, alignment: .leading)
+                    .offset(x: Spot.chipX + 23, y: Spot.chipY - 4.5)
+                } else {
+                    HStack(spacing: 3) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Theme.charge)
+                        Text("Saved to Downloads")
+                            .foregroundStyle(Theme.primary)
+                    }
+                    .font(.system(size: 6.5, weight: .semibold))
+                    .frame(width: 90, alignment: .leading)
+                    .offset(x: Spot.chipX + 37, y: Spot.chipY - 10)
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                }
+            }
         }
     }
 
@@ -230,8 +323,11 @@ struct NotchDemo: View {
             isOpen = true
             return
         }
+        if startsWithNew {
+            guard await converts() else { return }
+        }
         while !Task.isCancelled {
-            guard await speaksUp(), await opens(), await panelControls() else { return }
+            guard await speaksUp(), await opens(), await panelControls(), await converts() else { return }
         }
     }
 
@@ -295,10 +391,72 @@ struct NotchDemo: View {
         return await pause(1.0)
     }
 
+    private func converts() async -> Bool {
+        activeTip = 3
+        file = .fileStart
+        pointer = .fileStart
+        withAnimation(.easeOut(duration: 0.3)) {
+            fileVisible = true
+            pointerVisible = true
+        }
+        guard await pause(0.7) else { return false }
+        withAnimation(.easeInOut(duration: 1.0)) {
+            file = .notch
+            pointer = .notch
+        }
+        guard await pause(0.85) else { return false }
+        convertStage = .drop
+        withAnimation(Theme.open) { isOpen = true }
+        guard await pause(0.9) else { return false }
+        // Dropped: the photo goes into the panel.
+        withAnimation(.easeIn(duration: 0.2)) { fileVisible = false }
+        withAnimation(Theme.swap) { convertStage = .chips }
+        guard await pause(0.7) else { return false }
+        withAnimation(.easeInOut(duration: 0.6)) { pointer = .chip }
+        guard await pause(0.75) else { return false }
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { chipPressed = true }
+        guard await pause(0.18) else { return false }
+        chipPressed = false
+        withAnimation(Theme.swap) { convertStage = .done }
+        guard await pause(1.7) else { return false }
+        withAnimation(.easeInOut(duration: 0.8)) { pointer = .leaving }
+        guard await pause(0.25) else { return false }
+        withAnimation(Theme.close) { isOpen = false }
+        withAnimation(.easeOut(duration: 0.4).delay(0.4)) { pointerVisible = false }
+        guard await pause(0.5) else { return false }
+        convertStage = nil
+        return await pause(0.5)
+    }
+
     /// Sleeps, returning false once the view has gone (the task is cancelled).
     private func pause(_ seconds: Double) async -> Bool {
         try? await Task.sleep(for: .seconds(seconds))
         return !Task.isCancelled
+    }
+}
+
+/// A photo being dragged: a little picture with its name.
+private struct DemoFile: View {
+    var body: some View {
+        VStack(spacing: 2) {
+            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                .fill(LinearGradient(colors: [Color(red: 0.36, green: 0.7, blue: 1), Color(red: 0.2, green: 0.36, blue: 0.8)],
+                                     startPoint: .top, endPoint: .bottom))
+                .overlay(alignment: .bottom) {
+                    Image(systemName: "mountain.2.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.bottom, 1)
+                }
+                .frame(width: 20, height: 20)
+                .overlay(RoundedRectangle(cornerRadius: 2.5, style: .continuous).strokeBorder(.white, lineWidth: 1))
+                .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+            Text("IMG.HEIC")
+                .font(.system(size: 5.5, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 2)
+                .background(RoundedRectangle(cornerRadius: 1.5).fill(Color.blue.opacity(0.8)))
+        }
     }
 }
 

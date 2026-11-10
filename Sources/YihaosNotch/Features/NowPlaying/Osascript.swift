@@ -5,12 +5,14 @@ import Foundation
 enum Osascript {
     /// Returns trimmed stdout, or nil if the script fails. The child process is
     /// terminated if it runs past `deadline` seconds or the calling task is cancelled.
-    static func run(_ source: String, deadline: Double = 5) async -> String? {
+    /// `arguments` reach the script's `on run argv` handler, so paths never need
+    /// quoting inside the script.
+    static func run(_ source: String, arguments: [String] = [], deadline: Double = 5) async -> String? {
         if Task.isCancelled { return nil }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", source]
+        process.arguments = ["-e", source] + arguments
         let stdout = Pipe()
         process.standardOutput = stdout
         process.standardError = FileHandle.nullDevice
@@ -49,6 +51,8 @@ enum Osascript {
                     state.fail()
                     return
                 }
+                // Cancelled between the check above and the launch.
+                if state.isCancelled { process.terminate() }
                 DispatchQueue.global().asyncAfter(deadline: .now() + deadline) {
                     if process.isRunning { process.terminate() }
                 }
