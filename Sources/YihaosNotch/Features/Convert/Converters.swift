@@ -18,6 +18,7 @@ enum ConvertError: Error, CustomStringConvertible, Equatable {
     case unsupportedAudio(String, codec: String)
     case tooLarge(String)
     case noSound(String)
+    case officeFailed(String, app: String)
 
     var description: String {
         switch self {
@@ -28,6 +29,7 @@ enum ConvertError: Error, CustomStringConvertible, Equatable {
         case .failed(let name): "Couldn't convert \(name)."
         case .tooLarge(let name): "\(name) is too large to convert here."
         case .noSound(let name): "\(name) has no sound to save."
+        case .officeFailed(let name, let app): "Microsoft \(app) couldn't convert \(name)."
         case .unsupportedVideo(let name, let codec):
             "\(name) has \(codec) video, which macOS can't convert. H.264 and HEVC videos work."
         case .unsupportedAudio(let name, let codec):
@@ -78,10 +80,40 @@ enum Converters {
         case (.document, _), (.markdown, _):
             let note = try await Documents.convert(input, to: target, useWord: options.useWord, out: out)
             return (out, note)
+        case (.presentation, .pdf), (.presentation, .powerPoint):
+            try await PowerPointAutomation.convert(input, to: target, out: out)
+        case (.presentation, .png), (.presentation, .jpeg):
+            // PowerPoint makes a PDF; the slides are drawn from it like PDF pages.
+            let slides = folder.appendingPathComponent(".\(UUID().uuidString).pdf")
+            defer { try? FileManager.default.removeItem(at: slides) }
+            try await PowerPointAutomation.convert(input, to: .pdf, out: slides)
+            return (try await renamingErrors(name) {
+                try await pdfPages(slides, to: target, folder: folder, base: base, progress: progress)
+            }, nil)
+        case (.spreadsheet, .pdf), (.spreadsheet, .excel):
+            try await ExcelAutomation.convert(input, to: target, out: out)
+        case (.spreadsheet, .csv):
+            if XLSX.canRead(input) {
+                return (try await XLSX.csv(input, name: name, folder: folder, base: base), nil)
+            }
+            // Older and OpenDocument spreadsheets: Excel saves an .xlsx to read.
+            let book = folder.appendingPathComponent(".\(UUID().uuidString).xlsx")
+            defer { try? FileManager.default.removeItem(at: book) }
+            try await ExcelAutomation.convert(input, to: .excel, out: book)
+            return (try await XLSX.csv(book, name: name, folder: folder, base: base), nil)
         default:
             throw ConvertError.failed(name)
         }
         return (out, nil)
+    }
+
+    /// Errors about an intermediate file name the file that was dropped instead.
+    static func renamingErrors<T>(_ name: String, _ work: () async throws -> T) async throws -> T {
+        do {
+            return try await work()
+        } catch is ConvertError {
+            throw ConvertError.failed(name)
+        }
     }
 
     // MARK: Images

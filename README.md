@@ -75,6 +75,8 @@ or upload. It all happens on your Mac; nothing is uploaded.
 | Markdown | PDF, Word or HTML |
 | Video (MOV, MP4, M4V, MKV) | MP4, or just its sound as M4A |
 | Audio (MP3, M4A, WAV, FLAC, AIFF) | M4A or WAV |
+| Slides (PowerPoint, OpenDocument) | PDF, PNG or JPEG of each slide, or PowerPoint (.pptx); needs Microsoft PowerPoint |
+| Spreadsheets (Excel, OpenDocument, CSV) | PDF, Excel (.xlsx) or CSV; needs Microsoft Excel, except .xlsx to CSV (without Excel, a CSV is treated as text) |
 
 With Microsoft Word installed, PDF and Word versions of documents are made by Word,
 so they look exactly as Word prints them; without it, macOS's own text system makes
@@ -85,7 +87,12 @@ H.264 and HEVC video (most MKVs), not VP9 or AV1. 5.1 sound in FLAC or Opus can'
 converted, so those videos come out without sound (and say so). Drop several files at once to convert
 them all to the same format; more than five are saved together in one folder, such as
 "Converted to JPEG". Files that can't become the same format (photos and videos, say)
-have to be dropped separately, and the notch says so. Location data is removed from
+have to be dropped separately, and the notch says so. Files it can't convert at all
+(a ZIP, a folder, a Keynote file) are still held, with a note saying so and, where
+there is one, what to do instead. PowerPoint and Excel do the converting for slides and
+spreadsheets, opening a copy so the original is never touched. CSV comes out as UTF-8
+with each sheet as its own file, and values as stored: dates as 2026-11-17, times as
+14:30:00, numbers without currency signs or thousands separators. Location data is removed from
 converted photos unless you turn that off.
 
 Optionally, the volume and brightness keys show a small indicator in the notch instead
@@ -118,7 +125,7 @@ can be skipped; a skipped one is asked for when its feature is first used.
 | Calendars | Showing your events and meeting links. Read-only. |
 | Camera | The mirror. The camera runs only while the mirror is on screen. |
 | Automation (Music, Spotify) | Reading what's playing and controlling playback. |
-| Automation (Microsoft Word) | Only when you convert a document with Word installed. Word also asks once for access to the folder it works in (`~/Library/Caches/com.yihao.YihaosNotch/Word`). Turn off "Use Microsoft Word for documents" in Settings to never ask. |
+| Automation (Microsoft Word, PowerPoint, Excel) | Only when you convert a document with Word installed, or slides or a spreadsheet. Each app also asks once for access to the folder it works in (`~/Library/Caches/com.yihao.YihaosNotch/Word`, `PowerPoint` or `Excel`). Turn off "Use Microsoft Word for documents" in Settings to never ask Word. |
 | Downloads folder | macOS asks the first time a converted file is saved there (or into Desktop or Documents, if you choose those). |
 | Data from other apps | macOS asks the first time you drop a file that another app keeps in its own storage (a photo dragged out of WeChat, say). |
 | Accessibility | Only for the optional volume/brightness indicator, which needs to catch those keys before macOS does. Off by default. A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on, and only while an external keyboard is connected (anything that presents itself as one counts, such as some mouse receivers, security keys or Karabiner's virtual keyboard), the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. Settings says so too. |

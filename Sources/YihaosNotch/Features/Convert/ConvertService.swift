@@ -22,7 +22,8 @@ final class ConvertService {
         case converting(target: ConvertTarget, done: Int, total: Int, fraction: Double)
         case finished
         case failed(String)
-        /// Dropped, but these files can't be converted together; says why.
+        /// Dropped, but these files can't be converted (together, or at all); says why
+        /// next to them.
         case refused(ConvertCatalog.Refusal)
     }
 
@@ -80,12 +81,11 @@ final class ConvertService {
         settings.convertDropEnabled && !isConverting && !urls.isEmpty && !ConvertCatalog.targets(for: urls).isEmpty
     }
 
-    /// Whether the notch should react to these files: to convert them, or to say why
-    /// it can't (including that it's busy). Files none of which can be converted are
-    /// left alone.
+    /// Whether the notch should react to these files: any files at all, so that ones it
+    /// can't convert are still held and it says why (or that it's busy), rather than
+    /// the drop silently doing nothing.
     func reacts(to urls: [URL]) -> Bool {
         settings.convertDropEnabled && !urls.isEmpty
-            && (!ConvertCatalog.targets(for: urls).isEmpty || ConvertCatalog.refusal(for: urls) != nil)
     }
 
     // MARK: Dragging and dropping
@@ -93,7 +93,8 @@ final class ConvertService {
     func hover(_ urls: [URL]) {
         guard reacts(to: urls) else { return }
         if isConverting {
-            busyDrop = true
+            // "Drop them again when it's done" only makes sense for files it can convert.
+            busyDrop = !ConvertCatalog.targets(for: urls).isEmpty
             return
         }
         if phase != .hovering { beforeHover = (phase, files, targets) }
@@ -125,7 +126,7 @@ final class ConvertService {
         }
         // Still busy: the message stays until this one finishes.
         if isConverting {
-            busyDrop = true
+            busyDrop = !ConvertCatalog.targets(for: urls).isEmpty
             return
         }
         beforeHover = nil
@@ -134,14 +135,17 @@ final class ConvertService {
         convertedCount = 0
         note = nil
         unseen = false
-        if !accepts(urls), let refusal = ConvertCatalog.refusal(for: urls) {
-            files = []
+        files = urls
+        if !accepts(urls) {
+            // Never the size of a folder, app or disk dropped by mistake: adding up
+            // everything inside could take minutes.
+            filesSize = Self.size(of: urls.filter { !ConvertCatalog.isFolder($0) && !Self.isPackage($0) })
             targets = []
-            phase = .refused(refusal)
+            phase = .refused(ConvertCatalog.refusal(for: urls)
+                             ?? .init(title: "Can't convert these", detail: "Drop them again in a moment."))
             log.info("refused \(urls.count) file(s)")
             return
         }
-        files = urls
         filesSize = Self.size(of: urls)
         targets = ConvertCatalog.targets(for: urls)
         preferred = remembered(in: targets, for: urls)
@@ -221,13 +225,21 @@ final class ConvertService {
     /// finished out of sight.
     func panelClosed() {
         panelIsOpen = false
+        // A drag that passed by: back to what was there, which may be a result that
+        // hasn't been seen yet.
+        if phase == .hovering { endHover() }
         guard !isConverting, !unseen else { return }
         reset()
     }
 
     func panelOpened() {
         panelIsOpen = true
-        unseen = false
+        // Opened by a drag passing over: the result it covers still hasn't been seen.
+        if phase != .hovering { unseen = false }
+    }
+
+    nonisolated static func isPackage(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isPackageKey]))?.isPackage == true
     }
 
     private func reset() {

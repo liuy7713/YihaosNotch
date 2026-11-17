@@ -292,7 +292,7 @@ final class NotchController {
                   Date.now >= armSuppressedUntil
             else { return }
             // Dragging a file or a selection past the notch doesn't open it by hovering;
-            // only a file that can be converted does, through the gesture window.
+            // dragged files do, through the gesture window.
             guard NSEvent.pressedMouseButtons == 0 else { return }
             arm()
         case .arming:
@@ -393,8 +393,8 @@ final class NotchController {
         stopPointerTracking()
     }
 
-    /// Files dragged onto the closed notch open it on the drop target, if they can be
-    /// converted; anything else is refused, so it doesn't open for every drag.
+    /// Files dragged onto the closed notch open it on the drop target: ready to convert,
+    /// or saying why it can't, so a drop never silently does nothing.
     private func filesArrived(_ urls: [URL], dropped: Bool) -> Bool {
         guard convert.reacts(to: urls), screenFrame != .zero else { return false }
         if dropped { convert.stage(urls) } else { convert.hover(urls) }

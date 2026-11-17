@@ -133,7 +133,7 @@ struct SettingsView: View {
             } header: {
                 Text("Converting")
             } footer: {
-                Caption("Drop photos, PDFs, Word or Markdown documents, video or audio on the notch. It all happens on this Mac; nothing is uploaded.")
+                Caption("Drop photos, PDFs, documents, slides, spreadsheets, video or audio on the notch. It all happens on this Mac; nothing is uploaded.")
                     .padding(.leading, 10)
             }
 

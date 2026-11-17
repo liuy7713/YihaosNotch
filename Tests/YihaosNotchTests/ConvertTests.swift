@@ -60,9 +60,16 @@ struct ConvertCatalogTests {
     }
 
     @Test func explainsDropsThatCantGoTogether() {
-        // Nothing convertible at all: the drag passes by without a word.
-        #expect(ConvertCatalog.refusal(for: urls("Archive.zip")) == nil)
-        #expect(ConvertCatalog.refusal(for: urls("a.zip", "b.dmg")) == nil)
+        // Nothing convertible at all: held anyway, and it says so.
+        #expect(ConvertCatalog.refusal(for: urls("Archive.zip"))
+            == .init(title: "ZIP files aren't supported yet", detail: "Unzip it and drop the files inside."))
+        #expect(ConvertCatalog.refusal(for: urls("a.zip", "b.dmg"))?.title == "These files aren't supported yet")
+        #expect(ConvertCatalog.refusal(for: urls("a.dmg", "b.dmg"))?.title == "DMG files aren't supported yet")
+        #expect(ConvertCatalog.refusal(for: urls("Talk.key"))?.detail
+            == "Export it from Keynote as PowerPoint or PDF, then drop that.")
+        #expect(ConvertCatalog.refusal(for: urls("LICENSE"))?.title == "This file isn't supported yet")
+        #expect(ConvertCatalog.refusal(for: urls("Safari.app"))?.title == "Apps can't be converted")
+        #expect(ConvertCatalog.refusal(for: urls("LICENSE"))?.detail.hasPrefix("The notch converts photos") == true)
         // Fine together: no refusal.
         #expect(ConvertCatalog.refusal(for: urls("a.jpg", "b.pdf")) == nil)
         let mixed = ConvertCatalog.refusal(for: urls("a.jpg", "b.heic", "clip.mov"))
@@ -76,6 +83,59 @@ struct ConvertCatalogTests {
         #expect(strays == .init(title: "Can't convert 2 of these files", detail: "Drop the 2 photos without them."))
         let mixedStray = ConvertCatalog.refusal(for: urls("a.jpg", "clip.mov", "x.zip"))
         #expect(mixedStray?.detail == "Drop the other files without it.")
+    }
+
+    @Test func saysFoldersCantBeConverted() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        #expect(ConvertCatalog.refusal(for: [folder])
+            == .init(title: "Folders can't be converted", detail: "Open it and drop the files inside."))
+        #expect(ConvertCatalog.isFolder(folder))
+        #expect(!ConvertCatalog.isFolder(URL(fileURLWithPath: "/tmp/missing-\(UUID().uuidString)")))
+    }
+
+    @Test func slidesAndSpreadsheetsNeedOffice() {
+        Office.$installedForTesting.withValue([.powerPoint, .excel]) {
+            #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/Deck.PPTX")) == .presentation)
+            #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/old.ppt")) == .presentation)
+            #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/Budget.xlsx")) == .spreadsheet)
+            #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/old.xls")) == .spreadsheet)
+            #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/data.csv")) == .spreadsheet)
+            #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/show.ppsx")) == nil)
+            #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/Budget.numbers")) == nil)
+            #expect(ConvertCatalog.targets(for: urls("Deck.pptx")) == [.pdf, .png, .jpeg])
+            #expect(ConvertCatalog.targets(for: urls("old.ppt")) == [.pdf, .png, .jpeg, .powerPoint])
+            #expect(ConvertCatalog.targets(for: urls("Budget.xlsx")) == [.pdf, .csv])
+            #expect(ConvertCatalog.targets(for: urls("old.xls")) == [.pdf, .excel, .csv])
+            #expect(ConvertCatalog.targets(for: urls("data.csv")) == [.pdf, .excel])
+            #expect(ConvertCatalog.targets(for: urls("a.pptx", "b.pptx")) == [.pdf, .png, .jpeg])
+            #expect(ConvertCatalog.describe(urls("a.pptx", "b.ppt")) == "2 presentations")
+            // Both can become PDF.
+            #expect(ConvertCatalog.targets(for: urls("Deck.pptx", "Budget.xlsx")) == [.pdf])
+            #expect(ConvertCatalog.refusal(for: urls("Deck.pptx", "clip.mov"))?.detail
+                == "Presentations and videos need different formats. Drop them separately.")
+        }
+        Office.$installedForTesting.withValue([]) {
+            // An .xlsx still becomes CSV; the rest needs the app. CSV is text then.
+            #expect(ConvertCatalog.targets(for: urls("Budget.xlsx")) == [.csv])
+            #expect(ConvertCatalog.targets(for: urls("old.xls")).isEmpty)
+            #expect(ConvertCatalog.targets(for: urls("Deck.pptx")).isEmpty)
+            #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/data.csv")) == .document)
+            #expect(ConvertCatalog.refusal(for: urls("Deck.pptx"))
+                == .init(title: "Can't convert Deck.pptx", detail: "Converting slides needs Microsoft PowerPoint."))
+            #expect(ConvertCatalog.refusal(for: urls("old.xls"))
+                == .init(title: "Can't convert old.xls", detail: "Converting XLS files needs Microsoft Excel."))
+            #expect(ConvertCatalog.refusal(for: urls("a.ppt", "b.ppt"))?.title == "Can't convert these files")
+            #expect(ConvertCatalog.refusal(for: urls("Deck.pptx", "a.zip"))
+                == .init(title: "Can't convert Deck.pptx", detail: "Converting slides needs Microsoft PowerPoint."))
+            #expect(ConvertCatalog.refusal(for: urls("a.ods", "b.xls"))?.detail
+                == "Converting these spreadsheets needs Microsoft Excel.")
+            #expect(ConvertCatalog.refusal(for: urls("a.pptx", "b.xls"))?.detail
+                == "Converting them needs Microsoft PowerPoint and Excel.")
+            #expect(ConvertCatalog.refusal(for: urls("a.jpg", "b.ppt"))?.title == "Can't convert b.ppt")
+            #expect(ConvertCatalog.refusal(for: urls("Budget.xlsx")) == nil)
+        }
     }
 
     @Test func namesBatchFoldersByTheNewFormat() {
@@ -318,5 +378,166 @@ struct ConversionTests {
         let result = try AVAudioFile(forReading: out)
         #expect(result.length == 22_050)
         #expect(result.fileFormat.channelCount == 2)
+    }
+}
+
+/// Reading .xlsx files for CSV, without Excel.
+struct XLSXTests {
+    /// Zips the parts into an .xlsx with the system's `zip`.
+    private func workbook(_ parts: [String: String]) throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        for (path, xml) in parts {
+            let url = folder.appendingPathComponent(path)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try xml.write(to: url, atomically: true, encoding: .utf8)
+        }
+        let out = folder.appendingPathExtension("xlsx")
+        let zip = Process()
+        zip.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        zip.currentDirectoryURL = folder
+        zip.arguments = ["-qr", out.path, "."]
+        try zip.run()
+        zip.waitUntilExit()
+        try FileManager.default.removeItem(at: folder)
+        return out
+    }
+
+    private let main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    private let rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+    private func sample() throws -> URL {
+        try workbook([
+            "xl/workbook.xml": """
+                <workbook xmlns="\(main)" xmlns:r="\(rel)"><workbookPr/><sheets>
+                <sheet name="Sales" sheetId="1" r:id="rId1"/>
+                <sheet name="Secret" sheetId="2" state="hidden" r:id="rId2"/>
+                <sheet name="Q1/Q2" sheetId="3" r:id="rId3"/>
+                </sheets></workbook>
+                """,
+            "xl/_rels/workbook.xml.rels": """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                <Relationship Id="rId1" Type="\(rel)/worksheet" Target="worksheets/sheet1.xml"/>
+                <Relationship Id="rId2" Type="\(rel)/worksheet" Target="worksheets/sheet2.xml"/>
+                <Relationship Id="rId3" Type="\(rel)/worksheet" Target="/xl/worksheets/sheet3.xml"/>
+                </Relationships>
+                """,
+            "xl/sharedStrings.xml": """
+                <sst xmlns="\(main)"><si><t>名前</t></si><si><r><t>Hello, </t></r><r><t>"world"</t></r></si>
+                <si><t>東京</t><rPh sb="0" eb="2"><t>トウキョウ</t></rPh></si></sst>
+                """,
+            "xl/styles.xml": """
+                <styleSheet xmlns="\(main)"><numFmts><numFmt numFmtId="164" formatCode="yyyy/mm/dd;@"/>
+                <numFmt numFmtId="165" formatCode="#,##0 &quot;days&quot;"/></numFmts>
+                <cellStyleXfs><xf numFmtId="14"/></cellStyleXfs>
+                <cellXfs><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="165"/><xf numFmtId="22"/></cellXfs></styleSheet>
+                """,
+            "xl/worksheets/sheet1.xml": """
+                <worksheet xmlns="\(main)"><sheetData>
+                <row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1" t="s"><v>1</v></c></row>
+                <row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2" s="1"><v>46343</v></c><c r="C2" s="2"><v>12</v></c></row>
+                <row r="4"><c r="A4" t="b"><v>1</v></c><c r="B4" s="3"><v>46343.5</v></c><c r="C4"><f>1/3</f><v>0.33333333333333331</v></c></row>
+                <row r="5"><c r="A5" t="inlineStr"><is><t>line
+                two</t></is></c><c r="B5" s="1"/></row>
+                </sheetData></worksheet>
+                """,
+            "xl/worksheets/sheet2.xml": """
+                <worksheet xmlns="\(main)"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>
+                """,
+            "xl/worksheets/sheet3.xml": """
+                <x:worksheet xmlns:x="\(main)"><x:sheetData><x:row><x:c><x:v>7</x:v></x:c><x:c t="str"><x:v>ok</x:v></x:c></x:row></x:sheetData></x:worksheet>
+                """,
+        ])
+    }
+
+    @Test func readsVisibleSheetsAsText() throws {
+        let url = try sample()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let sheets = try XLSX.read(url, name: "Book.xlsx")
+        #expect(sheets.map(\.name) == ["Sales", "Q1/Q2"])
+        #expect(sheets[0].rows == [
+            ["名前", "", "Hello, \"world\""],
+            ["東京", "2026-11-17", "12"],
+            [],
+            ["TRUE", "2026-11-17 12:00:00", "0.333333333333333"],
+            ["line\ntwo"],
+        ])
+        #expect(sheets[1].rows == [["7", "ok"]])
+    }
+
+    @Test func writesOneCSVOrAFolderOfThem() async throws {
+        let url = try sample()
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: out)
+        }
+        let made = try await XLSX.csv(url, name: "Book.xlsx", folder: out, base: "Book")
+        #expect(made.lastPathComponent == "Book")
+        let names = try FileManager.default.contentsOfDirectory(atPath: made.path).sorted()
+        #expect(names == ["Q1-Q2.csv", "Sales.csv"])
+        let data = try Data(contentsOf: made.appendingPathComponent("Sales.csv"))
+        #expect(data.starts(with: [0xEF, 0xBB, 0xBF]))
+        let text = String(decoding: data.dropFirst(3), as: UTF8.self)
+        #expect(text.hasPrefix("名前,,\"Hello, \"\"world\"\"\"\r\n東京,2026-11-17,12\r\n,,\r\n"))
+    }
+
+    @Test func hostileFilesDontCrashOrBalloon() throws {
+        let url = try workbook([
+            "xl/workbook.xml": """
+                <workbook xmlns="\(main)" xmlns:r="\(rel)"><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>
+                """,
+            "xl/_rels/workbook.xml.rels": """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                <Relationship Id="rId1" Type="\(rel)/worksheet" Target="worksheets/sheet1.xml"/></Relationships>
+                """,
+            "xl/worksheets/sheet1.xml": """
+                <worksheet xmlns="\(main)"><sheetData>
+                <row r="-9223372036854775808"><c><v>1</v></c></row>
+                <row r="9223372036854775807"/><row/><row/>
+                <row r="1"><c r="XFD1"><v>1</v></c></row><row r="1048576"><c r="A1048576"><v>1</v></c></row>
+                </sheetData></worksheet>
+                """,
+        ])
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(throws: ConvertError.tooLarge("Big.xlsx")) { try XLSX.read(url, name: "Big.xlsx") }
+    }
+
+    @Test func notAWorkbook() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).xlsx")
+        try Data("not a zip".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(throws: ConvertError.unreadable("Fake.xlsx")) { try XLSX.read(url, name: "Fake.xlsx") }
+    }
+
+    @Test func cellsAndDates() {
+        #expect(XLSX.column("A1") == 0)
+        #expect(XLSX.column("AB12") == 27)
+        #expect(XLSX.column("XFD1") == 16_383)
+        #expect(XLSX.column("12") == nil)
+        #expect(XLSX.date(1, date1904: false) == "1900-01-01")
+        #expect(XLSX.date(61, date1904: false) == "1900-03-01")
+        #expect(XLSX.date(1, date1904: true) == "1904-01-02")
+        #expect(XLSX.date(0.75, date1904: false) == "18:00:00")
+        #expect(XLSX.date(-1, date1904: false) == nil)
+        #expect(XLSX.numberStyle(id: 14, code: nil) == .date)
+        #expect(XLSX.numberStyle(id: 170, code: "[$-409]mmm d, yyyy") == .date)
+        #expect(XLSX.numberStyle(id: 171, code: "#,##0.00 \"days\"") == nil)
+        #expect(XLSX.numberStyle(id: 172, code: "[Red]0.0") == nil)
+        #expect(XLSX.numberStyle(id: 173, code: "0.0 _s") == nil)
+        #expect(XLSX.numberStyle(id: 174, code: "h:mm AM/PM") == .time)
+        #expect(XLSX.numberStyle(id: 175, code: "[h]:mm") == .elapsed)
+        #expect(XLSX.numberStyle(id: 0, code: nil) == nil)
+        #expect(XLSX.dateTime(1.25, style: .elapsed, date1904: false) == "30:00:00")
+        #expect(XLSX.dateTime(46343.75, style: .time, date1904: false) == "18:00:00")
+        #expect(XLSX.format(1e15) == "1000000000000000")
+        #expect(XLSX.format(0.1 + 0.2) == "0.3")
+        #expect(XLSX.unescape("a_x000D_b_x005F_x") == "a\rb_x")
+        #expect(XLSX.resolve("../xl/worksheets/sheet1.xml") == "xl/worksheets/sheet1.xml")
+        #expect(XLSX.resolve("/xl/a.xml") == "xl/a.xml")
+        #expect(XLSX.cell("B12")! == (1, 11))
+        #expect(XLSX.cell("A0")?.row == nil)
+        #expect(XLSX.csv([["a", "b c", " x"], ["1"]]) == "a,b c,\" x\"\r\n1,,\r\n")
+        #expect(XLSX.fileName(".hidden/one:two") == "_hidden-one-two")
     }
 }

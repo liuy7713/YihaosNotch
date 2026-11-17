@@ -206,7 +206,7 @@ enum WordAutomation {
         let id = UUID().uuidString
         let source = work.appendingPathComponent("\(id).\(input.pathExtension)")
         do {
-            try prepare(work)
+            try Office.prepare(work)
             if input.pathExtension.lowercased().hasPrefix("htm") {
                 // Word would load the page's web images and stylesheets: give it a copy
                 // without them, so converting never goes online.
@@ -235,7 +235,7 @@ enum WordAutomation {
             for url in copied { try? FileManager.default.removeItem(at: url) }
         }
         do {
-            try prepare(work)
+            try Office.prepare(work)
             // No web images: Word would fetch them.
             var html = MarkdownHTML.document(markdown, title: title, base: base, remoteImages: false)
             // Local images, by their full file URLs, become copies next to the page. Only
@@ -265,18 +265,6 @@ enum WordAutomation {
               values.contentType?.conforms(to: .image) == true
         else { return false }
         return true
-    }
-
-    /// Makes the folder, and clears out anything an earlier conversion left behind
-    /// (Word finishing after a Stop or a timeout, or the app quitting mid-way).
-    private static func prepare(_ work: URL) throws {
-        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
-        let old = Date.now.addingTimeInterval(-600)
-        let items = (try? FileManager.default.contentsOfDirectory(at: work, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-        for item in items {
-            let modified = (try? item.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            if modified < old { try? FileManager.default.removeItem(at: item) }
-        }
     }
 
     private static func run(_ source: URL, id: String, to target: ConvertTarget, out: URL) async -> Bool {

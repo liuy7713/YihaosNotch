@@ -207,7 +207,7 @@ private struct HowToPage: View {
                         detail: "The clock starts a timer, the camera shows a mirror, and the gear opens Settings and Quit.",
                         isActive: activeTip == 2)
                     Tip(symbol: "arrow.down.doc", title: "Drop files on it to convert",
-                        detail: "HEIC to JPEG, Word or Markdown to PDF, MOV to MP4 and more. Saved to Downloads.",
+                        detail: "HEIC to JPEG, Word or PowerPoint to PDF, MOV to MP4 and more. Saved to Downloads.",
                         isActive: activeTip == 3)
                 }
                 .frame(width: 250, alignment: .leading)

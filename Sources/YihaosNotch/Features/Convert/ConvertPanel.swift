@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 /// formats to choose from, progress, and the result.
 struct ConvertPanel: View {
     @Environment(ConvertService.self) private var convert
+    @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -14,7 +15,13 @@ struct ConvertPanel: View {
             case .idle, .hovering:
                 DropTarget(description: ConvertCatalog.describe(convert.files), refusal: convert.refusal)
             case .refused(let refusal):
-                DropTarget(description: "", refusal: refusal)
+                HStack(alignment: .center, spacing: 24) {
+                    FileSummary(urls: convert.files, size: convert.filesSize)
+                        .frame(width: 220, alignment: .leading)
+                    Divider().overlay(Theme.hairline).padding(.vertical, 8)
+                    RefusalView(refusal: refusal)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             case .choosing, .converting, .failed:
                 HStack(alignment: .center, spacing: 24) {
                     FileSummary(urls: convert.files, size: convert.filesSize)
@@ -50,11 +57,14 @@ struct ConvertPanel: View {
                     .foregroundStyle(Theme.primary)
                 ProgressBar(value: (Double(done) + min(max(fraction, 0), 1)) / Double(max(total, 1)))
                 HStack {
+                    let hint = firstTimeHint(target)
                     Text(convert.busyDrop ? "Still converting. Drop them again when it's done."
-                         : total > 1 ? "\(min(done + 1, total)) of \(total)" : " ")
-                        .font(.system(size: 11, weight: convert.busyDrop ? .regular : .medium).monospacedDigit())
-                        .foregroundStyle(convert.busyDrop ? Theme.secondary : Theme.tertiary)
-                        .lineLimit(1)
+                         : hint ?? (total > 1 ? "\(min(done + 1, total)) of \(total)" : " "))
+                        .font(.system(size: 11, weight: convert.busyDrop || hint != nil ? .regular : .medium)
+                            .monospacedDigit())
+                        .foregroundStyle(convert.busyDrop || hint != nil ? Theme.secondary : Theme.tertiary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Button("Stop") { convert.stop() }
                         .buttonStyle(PillButtonStyle())
@@ -75,6 +85,20 @@ struct ConvertPanel: View {
             FormatChoices()
                 .padding(.trailing, 30)
         }
+    }
+
+    /// The first time an Office app converts, it asks for access to its folder, maybe
+    /// behind other windows: say so, or the notch just looks stuck.
+    private func firstTimeHint(_ target: ConvertTarget) -> String? {
+        guard let file = convert.files.first else { return nil }
+        let app: Office.App? = switch ConvertCatalog.kind(of: file) {
+        case .presentation: .powerPoint
+        case .spreadsheet where target != .csv || !XLSX.canRead(file): .excel
+        case .document, .markdown: (target == .pdf || target == .word) && settings.convertUseWord ? .word : nil
+        default: nil
+        }
+        guard let app, Office.isInstalled(app), !app.hasWorked else { return nil }
+        return "\(app.name) may ask for access to a folder. Allow it."
     }
 }
 
@@ -113,7 +137,36 @@ private struct FormatChoices: View {
            convert.targets.contains(where: { $0 == .pdf || $0 == .word }) {
             parts.append("Microsoft Word makes the PDF and Word files.")
         }
+        let kinds = Set(convert.files.map(ConvertCatalog.kind(of:)))
+        if kinds.contains(.presentation) {
+            parts.append("Microsoft PowerPoint opens the slides to convert them.")
+        } else if kinds.contains(.spreadsheet), convert.targets.contains(where: { $0 == .pdf || $0 == .excel }) {
+            parts.append("Microsoft Excel makes the PDF and Excel files.")
+        }
         return parts.joined(separator: " ")
+    }
+}
+
+/// Why the files that were dropped can't be converted, next to them.
+private struct RefusalView: View {
+    let refusal: ConvertCatalog.Refusal
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(refusal.title, systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.primary)
+                .symbolRenderingMode(.multicolor)
+                .lineLimit(2)
+                .truncationMode(.middle)
+            Text(refusal.detail)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.secondary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.trailing, 30)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -252,9 +305,11 @@ private struct FileSummary: View {
     private var detail: String {
         let size = ByteCountFormatter.string(fromByteCount: self.size, countStyle: .file)
         guard urls.count == 1, let url = urls.first,
-              let type = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType,
-              let name = type.localizedDescription
+              let values = try? url.resourceValues(forKeys: [.contentTypeKey, .isDirectoryKey]),
+              let name = values.contentType?.localizedDescription
         else { return size }
+        // A folder or app that was refused isn't sized (see `stage`).
+        if values.isDirectory == true, self.size == 0 { return name }
         return "\(name) · \(size)"
     }
 }
@@ -370,7 +425,7 @@ private struct TintedIconLabelStyle: LabelStyle {
 }
 
 /// Accepts files dragged onto the open panel. The drag pasteboard can be read while the
-/// drag is still in the air, so only files that can be converted light it up.
+/// drag is still in the air, so the well can say before the drop whether they convert.
 struct ConvertDropDelegate: DropDelegate {
     let convert: ConvertService
 
