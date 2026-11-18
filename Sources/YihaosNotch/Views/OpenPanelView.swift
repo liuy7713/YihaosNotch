@@ -10,6 +10,7 @@ struct OpenPanelView: View {
     @Environment(TimerService.self) private var timer
     @Environment(UpdateService.self) private var updates
     @Environment(ConvertService.self) private var convert
+    @Environment(CleanKeyboardSession.self) private var cleaner
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum RightMode { case camera, timer, calendar, clock }
@@ -24,7 +25,13 @@ struct OpenPanelView: View {
         VStack(spacing: 0) {
             header
             ZStack {
-                if showsCards {
+                if cleaner.phase.isShowing {
+                    CleanKeyboardPanel()
+                        .padding(.horizontal, 22)
+                        .padding(.top, 12)
+                        .padding(.bottom, 20)
+                        .transition(.contentSwap(reduceMotion: reduceMotion))
+                } else if showsCards {
                     cards.transition(.contentSwap(reduceMotion: reduceMotion))
                 } else {
                     ConvertPanel()
@@ -35,6 +42,7 @@ struct OpenPanelView: View {
                 }
             }
             .animation(Theme.swapAnimation(reduceMotion: reduceMotion), value: showsCards)
+            .animation(Theme.swapAnimation(reduceMotion: reduceMotion), value: cleaner.phase.isShowing)
         }
         // Files dragged in take over from the camera or timer.
         .onChange(of: convert.phase) { _, phase in
@@ -44,9 +52,12 @@ struct OpenPanelView: View {
                 model.showingCamera = false
                 model.showingTimer = false
             }
+            // Files dropped make way past a Clean Keyboard card (not a running session).
+            if phase != .idle { cleaner.dismiss() }
         }
         // Files dragged onto the open panel (see also NotchGesturePanel for the closed notch).
-        .onDrop(of: [.fileURL], delegate: ConvertDropDelegate(convert: convert))
+        // Not during Clean Keyboard, when the converting panel is out of sight.
+        .onDrop(of: cleaner.phase.holdsPanel ? [] : [.fileURL], delegate: ConvertDropDelegate(convert: convert))
     }
 
     /// The usual cards, unless files are being converted; the camera or timer can
@@ -97,6 +108,8 @@ struct OpenPanelView: View {
                     ClockButton(now: context.date)
                         .fixedSize()
                         .layoutPriority(1)
+                        .opacity(cleaner.phase.holdsPanel ? 0.35 : 1)
+                        .allowsHitTesting(!cleaner.phase.holdsPanel)
                 }
                 .font(.system(size: 12, weight: .semibold))
             }
@@ -107,19 +120,27 @@ struct OpenPanelView: View {
             HStack(spacing: 4) {
                 HeaderIconButton(systemName: "web.camera.fill", label: "Camera mirror", active: model.showingCamera) {
                     convert.dismiss()
+                    cleaner.dismiss()
                     model.showingCamera.toggle()
                     model.showingTimer = false
                 }
+                .opacity(cleaner.phase.holdsPanel ? 0.35 : 1)
+                .allowsHitTesting(!cleaner.phase.holdsPanel)
                 HeaderIconButton(systemName: "gearshape.fill",
                                  label: updates.available == nil ? "Settings" : "Settings: an update is available",
                                  badge: updates.available != nil) {
                     SettingsWindowController.shared.show()
                 }
-                // A home for Quit that doesn't need a window; adds nothing to the panel.
+                // A home for Clean Keyboard and Quit that adds nothing to the panel.
                 .contextMenu {
                     Button("Settings…") { SettingsWindowController.shared.show() }
+                    Divider()
+                    Button("Clean Keyboard") { cleaner.request() }
+                    Divider()
                     Button("Quit Yihao's Notch") { NSApp.terminate(nil) }
                 }
+                .opacity(cleaner.phase.holdsPanel ? 0.35 : 1)
+                .allowsHitTesting(!cleaner.phase.holdsPanel)
                 batteryIndicator
                     .padding(.leading, 6)
             }
@@ -231,11 +252,13 @@ private struct ClockButton: View {
     @Environment(NotchViewModel.self) private var model
     @Environment(TimerService.self) private var timer
     @Environment(ConvertService.self) private var convert
+    @Environment(CleanKeyboardSession.self) private var cleaner
     @State private var hovering = false
 
     var body: some View {
         Button {
             convert.dismiss()
+            cleaner.dismiss()
             model.showingTimer.toggle()
             model.showingCamera = false
         } label: {

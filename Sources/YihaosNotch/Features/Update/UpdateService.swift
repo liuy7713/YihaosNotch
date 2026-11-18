@@ -31,6 +31,9 @@ final class UpdateService {
         if case .available(let release) = state { release } else { nil }
     }
 
+    /// True while something mustn't be interrupted by a restart (Clean Keyboard).
+    @ObservationIgnored var isBusy: () -> Bool = { false }
+
     /// Daily checks; follows the setting.
     var automatic = false {
         didSet { automatic ? schedule() : unschedule() }
@@ -105,7 +108,7 @@ final class UpdateService {
     /// can't replace itself (run from the disk image or Downloads, or a folder this
     /// account can't change), the release page opens instead.
     func install() {
-        guard let release = available else { return }
+        guard let release = available, !isBusy() else { return }
         guard UpdateInstaller.canReplace() else {
             NSWorkspace.shared.open(Release.pageURL)
             return

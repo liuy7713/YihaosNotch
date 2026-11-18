@@ -377,7 +377,7 @@ private struct ProgressBar: View {
     }
 }
 
-private struct CloseButton: View {
+struct CloseButton: View {
     let action: () -> Void
 
     var body: some View {
@@ -413,7 +413,7 @@ struct PillButtonStyle: ButtonStyle {
     }
 }
 
-private struct TintedIconLabelStyle: LabelStyle {
+struct TintedIconLabelStyle: LabelStyle {
     let tint: Color
 
     func makeBody(configuration: Configuration) -> some View {

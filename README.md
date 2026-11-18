@@ -98,6 +98,18 @@ converted photos unless you turn that off.
 Optionally, the volume and brightness keys show a small indicator in the notch instead
 of the macOS pop-up (in the header while the panel is open).
 
+**Clean Keyboard**: right-click the gear in the open panel and choose Clean Keyboard.
+After three seconds to lift your hands (Esc or Cancel stops it there), the keyboard,
+trackpad and any mouse turn off for 30 seconds (15 seconds or a minute in Settings)
+while you wipe them, with the screen lightly dimmed and a countdown in the middle. They
+come back on their own. Nothing on the keyboard or trackpad ends it early, but pressing
+Touch ID locks the Mac, which does; so do sleep and closing the lid. Two things can't be
+switched off: the Touch ID button, and the Caps Lock key's own toggle (the app puts
+Caps Lock back as it was). While a password field or Secure Keyboard Entry is on, macOS
+lets no app pause the keyboard, so it says so instead of starting. It turns input off
+on its own thread, and a watchdog makes sure it is back on two seconds after the end at
+the latest, quitting the app if it has to.
+
 It runs only on the built-in display, sits at 0% CPU when idle, and uses about 20–30 MB
 of memory.
 
@@ -128,7 +140,7 @@ can be skipped; a skipped one is asked for when its feature is first used.
 | Automation (Microsoft Word, PowerPoint, Excel) | Only when you convert a document with Word installed, or slides or a spreadsheet. Each app also asks once for access to the folder it works in (`~/Library/Caches/com.yihao.YihaosNotch/Word`, `PowerPoint` or `Excel`). Turn off "Use Microsoft Word for documents" in Settings to never ask Word. |
 | Downloads folder | macOS asks the first time a converted file is saved there (or into Desktop or Documents, if you choose those). |
 | Data from other apps | macOS asks the first time you drop a file that another app keeps in its own storage (a photo dragged out of WeChat, say). |
-| Accessibility | Only for the optional volume/brightness indicator, which needs to catch those keys before macOS does. Off by default. A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on, and only while an external keyboard is connected (anything that presents itself as one counts, such as some mouse receivers, security keys or Karabiner's virtual keyboard), the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. Settings says so too. |
+| Accessibility | For Clean Keyboard, which turns the keyboard and trackpad off while it runs and passes everything straight through the moment it ends (asked for the first time you choose it), and for the optional volume/brightness indicator, which needs to catch those keys before macOS does (off by default). A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on, and only while an external keyboard is connected (anything that presents itself as one counts, such as some mouse receivers, security keys or Karabiner's virtual keyboard), the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. Settings says so too. |
 
 ## Privacy
 

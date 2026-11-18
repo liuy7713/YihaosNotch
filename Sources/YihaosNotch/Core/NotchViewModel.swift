@@ -24,6 +24,8 @@ enum LiveActivity: Equatable {
     /// A conversion just finished (or failed) out of sight.
     /// Converting ended: how many files were made, out of how many.
     case converted(count: Int, total: Int)
+    /// Clean Keyboard has the keyboard off until this `Monotonic` time.
+    case cleaning(until: UInt64)
 
     /// Stable identity for animations, ignoring the changing payload.
     var kind: String {
@@ -39,6 +41,7 @@ enum LiveActivity: Equatable {
         case .timerDone: "timerDone"
         case .converting: "converting"
         case .converted: "converted"
+        case .cleaning: "cleaning"
         }
     }
 }
@@ -50,6 +53,8 @@ final class NotchViewModel {
     var notchSize = CGSize(width: 185, height: 32)
     var showingCamera = false
     var showingTimer = false
+    /// Clean Keyboard's deadline while it has the keyboard off (`Monotonic` time).
+    var cleaningUntil: UInt64?
 
     /// Body size of the open panel (excluding the top flares).
     let openSize = CGSize(width: 640, height: 244)
@@ -93,7 +98,8 @@ final class NotchViewModel {
         if case .converting(_, let done, let total, let fraction) = convert.phase {
             converting = (Double(done) + min(max(fraction, 0), 1)) / Double(max(total, 1))
         }
-        return Self.prioritise(transient: transient,
+        return Self.prioritise(cleaning: cleaningUntil,
+                               transient: transient,
                                timerDone: timerDone,
                                converting: converting,
                                timerRunning: timer.isActive,
@@ -109,10 +115,12 @@ final class NotchViewModel {
     static let startingWindow: ClosedRange<TimeInterval> = -120...60
 
     /// The priority rules on their own, so they can be checked without live services.
-    static func prioritise(transient: LiveActivity?, timerDone: Bool = false, converting: Double? = nil,
+    static func prioritise(cleaning: UInt64? = nil, transient: LiveActivity?, timerDone: Bool = false, converting: Double? = nil,
                            timerRunning: Bool, hasTrack: Bool,
                            isPlaying: Bool, recentlyPlayed: Bool, event: LiveActivity?,
                            eventIsStarting: Bool = false) -> LiveActivity? {
+        // Nothing else matters while the keyboard is off.
+        if let cleaning { return .cleaning(until: cleaning) }
         if let transient { return transient }
         if timerDone { return .timerDone }
         // Otherwise music played all day, or a focus timer, would hide the countdown at
@@ -179,7 +187,7 @@ final class NotchViewModel {
             let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
             let textWidth = (name as NSString).size(withAttributes: [.font: font]).width
             return min(max(textWidth.rounded(.up) + 16, 40), 110)
-        case .timer, .converting, .converted:
+        case .timer, .converting, .converted, .cleaning:
             return 48
         case .charging:
             return CompactActivityView.chargingWingWidth

@@ -5,7 +5,8 @@ import SwiftUI
 /// 0. the closed notch speaks up on its own: music, a meeting countdown, charging;
 /// 1. resting the pointer opens it, then a two-finger swipe does;
 /// 2. in the open panel, the clock, camera and gear are clicked in turn;
-/// 3. a photo is dragged onto the notch, dropped, and turned into a JPEG.
+/// 3. a photo is dragged onto the notch, dropped, and turned into a JPEG;
+/// 4. the gear is right-clicked, Clean Keyboard chosen, and a countdown runs.
 /// With Reduce Motion it's a still picture of the open panel.
 struct NotchDemo: View {
     @Binding var activeTip: Int
@@ -24,6 +25,8 @@ struct NotchDemo: View {
     @State private var file = Spot.fileStart
     @State private var fileVisible = false
     @State private var chipPressed = false
+    @State private var cleanStage: CleanStage?
+    @State private var cleanBar: CGFloat = 1
 
     private let screenSize = CGSize(width: 280, height: 178)
     private let closedSize = CGSize(width: 62, height: 13)
@@ -34,6 +37,14 @@ struct NotchDemo: View {
 
     /// The converting scene's panel: the drop well, the formats, then done.
     enum ConvertStage { case drop, chips, done }
+
+    /// The Clean Keyboard scene: the gear's menu (with the item lit once chosen), the
+    /// countdown, then "Back on".
+    enum CleanStage: Equatable {
+        case menu(chosen: Bool)
+        case counting(Int)
+        case done
+    }
 
     /// The open panel's header controls, with their centres measured from the middle
     /// of the notch (the clock sits left of the hardware notch, the icons right of it).
@@ -56,6 +67,8 @@ struct NotchDemo: View {
         case item(HeaderItem)
         /// Where the photo starts, and the JPEG button in the open panel.
         case fileStart, chip
+        /// "Clean Keyboard" in the gear's menu.
+        case menuItem
 
         var offset: CGSize {
             switch self {
@@ -65,8 +78,13 @@ struct NotchDemo: View {
             case .item(let item): CGSize(width: item.x + 4, height: 12)
             case .fileStart: CGSize(width: -78, height: 112)
             case .chip: CGSize(width: Self.chipX + 4, height: Self.chipY + 6)
+            case .menuItem: CGSize(width: Self.menuX + 6, height: Self.menuY + 21)
             }
         }
+
+        /// The gear menu's centre and top, from the top middle.
+        static let menuX: CGFloat = 78
+        static let menuY: CGFloat = 16
 
         static let chipX: CGFloat = 8
         static let chipY: CGFloat = 46
@@ -202,13 +220,85 @@ struct NotchDemo: View {
             if let convertStage {
                 convertContent(convertStage)
                     .transition(.opacity.animation(.easeOut(duration: 0.2)))
+            } else if let cleanStage, cleanStage != .menu(chosen: false), cleanStage != .menu(chosen: true) {
+                cleanContent(cleanStage)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 25)
+                    .transition(.opacity.animation(.easeOut(duration: 0.2)))
             } else {
                 demoContent
                     .padding(.horizontal, 22)
                     .padding(.top, 25)
                     .transition(.opacity.animation(.easeOut(duration: 0.2)))
             }
+
+            if case .menu(let chosen) = cleanStage {
+                gearMenu(chosen: chosen)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top))
+                        .animation(.easeOut(duration: 0.15)))
+            }
         }
+    }
+
+    /// The gear's right-click menu in miniature.
+    private func gearMenu(chosen: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(["Settings…", "Clean Keyboard", "Quit"], id: \.self) { title in
+                let lit = chosen && title == "Clean Keyboard"
+                Text(title)
+                    .font(.system(size: 5.5, weight: .medium))
+                    .foregroundStyle(lit ? Color.white : Theme.primary)
+                    .frame(width: 50, height: 8, alignment: .leading)
+                    .padding(.horizontal, 3)
+                    .background(RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(lit ? Color.blue : .clear))
+            }
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color(white: 0.2)))
+        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+        .offset(x: Spot.menuX, y: Spot.menuY)
+    }
+
+    /// Clean Keyboard's panel in miniature: the countdown and its bar, then "Back on".
+    private func cleanContent(_ stage: CleanStage) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 5) {
+                Group {
+                    if case .counting(let seconds) = stage {
+                        Text("\(seconds)")
+                            .contentTransition(.numericText(countsDown: true))
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Theme.charge)
+                    }
+                }
+                .font(.system(size: 18, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(Theme.primary)
+                .frame(height: 22, alignment: .leading)
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.fillStrong)
+                    Capsule().fill(Theme.primary).frame(width: 50 * cleanBar)
+                }
+                .frame(width: 50, height: 2.5)
+                .opacity(stage == .done ? 0 : 1)
+            }
+            .frame(width: 60, alignment: .leading)
+            Rectangle().fill(Theme.hairline).frame(width: 0.5, height: 34)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 3) {
+                    Image(systemName: "keyboard")
+                    Text(stage == .done ? "Back on" : "Keys off")
+                }
+                .font(.system(size: 6.5, weight: .semibold))
+                .foregroundStyle(Theme.primary)
+                Capsule().fill(Theme.tertiary).frame(width: 58, height: 3)
+                Capsule().fill(Theme.fillStrong).frame(width: 44, height: 3)
+            }
+            Spacer(minLength: 0)
+        }
+        .animation(.snappy(duration: 0.3), value: stage)
     }
 
     /// The converting panel in miniature, laid out by offsets from the top middle so
@@ -324,10 +414,11 @@ struct NotchDemo: View {
             return
         }
         if startsWithNew {
-            guard await converts() else { return }
+            guard await cleans() else { return }
         }
         while !Task.isCancelled {
-            guard await speaksUp(), await opens(), await panelControls(), await converts() else { return }
+            guard await speaksUp(), await opens(), await panelControls(), await converts(), await cleans()
+            else { return }
         }
     }
 
@@ -425,6 +516,49 @@ struct NotchDemo: View {
         withAnimation(.easeOut(duration: 0.4).delay(0.4)) { pointerVisible = false }
         guard await pause(0.5) else { return false }
         convertStage = nil
+        return await pause(0.5)
+    }
+
+    private func cleans() async -> Bool {
+        activeTip = 4
+        pointer = .notch
+        withAnimation(Theme.open) { isOpen = true }
+        withAnimation(.easeOut(duration: 0.3)) { pointerVisible = true }
+        guard await pause(0.6) else { return false }
+        withAnimation(.easeInOut(duration: 0.6)) { pointer = .item(.gear) }
+        guard await pause(0.7) else { return false }
+        // A right-click: the gear lights and its menu opens.
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { highlight = .gear }
+        guard await pause(0.2) else { return false }
+        withAnimation { cleanStage = .menu(chosen: false) }
+        guard await pause(0.5) else { return false }
+        withAnimation(.easeInOut(duration: 0.45)) { pointer = .menuItem }
+        guard await pause(0.6) else { return false }
+        cleanStage = .menu(chosen: true)
+        guard await pause(0.35) else { return false }
+        // Chosen: the pointer hides, as it does for real, and the countdown runs.
+        cleanBar = 1
+        withAnimation(.easeOut(duration: 0.2)) {
+            highlight = nil
+            pointerVisible = false
+            cleanStage = .counting(30)
+        }
+        withAnimation(.linear(duration: 2.6)) { cleanBar = 0 }
+        for seconds in [29, 28, 27, 26] {
+            guard await pause(0.65) else { return false }
+            withAnimation { cleanStage = .counting(seconds) }
+        }
+        guard await pause(0.2) else { return false }
+        withAnimation(Theme.swap) { cleanStage = .done }
+        guard await pause(1.6) else { return false }
+        pointer = .notch
+        withAnimation(.easeOut(duration: 0.3)) { pointerVisible = true }
+        withAnimation(.easeInOut(duration: 0.8)) { pointer = .leaving }
+        guard await pause(0.25) else { return false }
+        withAnimation(Theme.close) { isOpen = false }
+        withAnimation(.easeOut(duration: 0.4).delay(0.4)) { pointerVisible = false }
+        guard await pause(0.5) else { return false }
+        cleanStage = nil
         return await pause(0.5)
     }
 

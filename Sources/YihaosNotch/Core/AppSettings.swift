@@ -84,6 +84,26 @@ final class AppSettings {
     var convertUseWord: Bool {
         didSet { defaults.set(convertUseWord, forKey: Key.convertWord) }
     }
+    /// How long Clean Keyboard keeps the keyboard and trackpad off: one of
+    /// `cleanKeyboardChoices`.
+    var cleanKeyboardSeconds: Int {
+        didSet { defaults.set(cleanKeyboardSeconds, forKey: Key.cleanKeyboard) }
+    }
+    nonisolated static let cleanKeyboardChoices = [15, 30, 60]
+    nonisolated static func cleanKeyboardSeconds(stored: Int) -> Int {
+        cleanKeyboardChoices.contains(stored) ? stored : 30
+    }
+    /// Development aid: `--clean-seconds 5` cleans for that long instead (5 to 60).
+    nonisolated static let cleanSecondsOverride: Int? = {
+        let arguments = CommandLine.arguments
+        guard let index = arguments.firstIndex(of: "--clean-seconds"), index + 1 < arguments.count,
+              let seconds = Int(arguments[index + 1])
+        else { return nil }
+        return seconds
+    }()
+    /// What a session uses: the setting, or the development override.
+    var cleanKeyboardDuration: Int { Self.cleanSecondsOverride ?? cleanKeyboardSeconds }
+
     /// The version of the welcome screen last finished. It shows at launch while this is
     /// behind `Self.welcomeVersion`; raise that when the welcome gains something worth
     /// seeing again.
@@ -92,7 +112,8 @@ final class AppSettings {
     }
 
     /// 2: the tour gained converting.
-    nonisolated static let welcomeVersion = 2
+    /// 3: the tour gained Clean Keyboard.
+    nonisolated static let welcomeVersion = 3
     var needsWelcome: Bool { Self.needsWelcome(completed: welcomeCompleted) }
     /// Never finished any welcome: permissions haven't been asked for yet. (Someone
     /// who finished an older one sees only the tour again.)
@@ -124,6 +145,7 @@ final class AppSettings {
             Key.convertSave: SaveLocation.downloads.rawValue,
             Key.convertStripLocation: true,
             Key.convertWord: true,
+            Key.cleanKeyboard: 30,
         ])
         openTrigger = OpenTrigger(rawValue: d.string(forKey: Key.openTrigger) ?? "") ?? .hover
         hoverDelay = d.double(forKey: Key.hoverDelay)
@@ -145,6 +167,7 @@ final class AppSettings {
         convertFolder = d.string(forKey: Key.convertFolder) ?? ""
         convertStripLocation = d.bool(forKey: Key.convertStripLocation)
         convertUseWord = d.bool(forKey: Key.convertWord)
+        cleanKeyboardSeconds = Self.cleanKeyboardSeconds(stored: d.integer(forKey: Key.cleanKeyboard))
     }
 
     private enum Key {
@@ -168,5 +191,6 @@ final class AppSettings {
         static let convertFolder = "convertFolder"
         static let convertStripLocation = "convertStripLocation"
         static let convertWord = "convertUseWord"
+        static let cleanKeyboard = "cleanKeyboardSeconds"
     }
 }

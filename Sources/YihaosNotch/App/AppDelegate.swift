@@ -17,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let headphones = HeadphoneMonitor()
     private let updates = UpdateService()
     private lazy var convert = ConvertService(settings: settings)
+    private lazy var cleaningSystem = LiveCleaningSystem(settings: settings, mediaKeys: mediaKeys, updates: updates)
+    private lazy var cleaner = CleanKeyboardSession(system: cleaningSystem) { [settings] in
+        settings.cleanKeyboardDuration
+    }
     private var viewModel: NotchViewModel!
     private var controller: NotchController?
 
@@ -63,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environment(timer)
             .environment(updates)
             .environment(convert)
+            .environment(cleaner)
 
         let controller = NotchController(viewModel: viewModel, settings: settings, convert: convert,
                                          content: AnyView(root))
@@ -71,13 +76,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             calendar.noteOpened()
             convert.panelOpened()
         }
-        controller.onClose = { [convert] in convert.panelClosed() }
+        controller.onClose = { [convert, cleaner] in
+            convert.panelClosed()
+            cleaner.panelClosed()
+        }
         controller.onUserLeft = { [camera] in camera.deactivate() }
         controller.start()
         self.controller = controller
         SettingsWindowController.shared.onShow = { [weak controller] in controller?.dismissPanel() }
         NSApp.mainMenu = Self.makeMainMenu()
         mediaKeys.canShowHUD = { [weak controller] in controller?.canShowLevelChange ?? false }
+
+        cleaningSystem.session = cleaner
+        cleaningSystem.holdPanel = { [weak controller] hold in controller?.holdOpen(hold) }
+        cleaningSystem.showWings = { [viewModel] until in viewModel?.cleaningUntil = until }
+        updates.isBusy = { [cleaner] in cleaner.phase.isRunning }
 
         follow({ [settings] in settings.showLyrics }) { [nowPlaying] in nowPlaying.lyricsEnabled = $0 }
         follow({ [settings] in settings.hiddenCalendars }) { [calendar] in calendar.hiddenCalendars = $0 }
@@ -247,6 +260,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // welcome if it hasn't been finished.
     // An update dragged over the running copy reaches it here too, so that starts the
     // new version instead.
+    /// Quitting mid-clean (a newer copy taking over, say) gives the keyboard back
+    /// first. (The session also hears this itself; ending twice does nothing.)
+    func applicationWillTerminate(_ notification: Notification) {
+        cleaner.interrupt()
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if SingleInstance.relaunchIfUpdated() { return false }
         if settings.needsWelcome {

@@ -97,6 +97,7 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--preview-welcome N` | Shows the welcome screen at page N (0–2), even if it has been finished. |
 | `--preview-hud` | Cycles the volume, brightness, headphone and charging indicators (charging shows the real power state). The real volume and brightness are untouched. |
 | `--preview-convert PATH` | Shows PATH as if dropped on the notch (add `--preview-open` to keep the panel open on it). |
+| `--clean-seconds N` | Clean Keyboard runs for N seconds (5 to 60) instead of the Settings length, for quick tests. |
 | `--update-feed URL` | Reads the release description from URL (a copy of GitHub's `releases/latest` JSON) instead of GitHub, checks two seconds after launch, and accepts the image from any address; the signature check still applies, so only a build signed with your identity installs. Logs the permission state at launch (category Updater), for checking an update keeps it. |
 
 The media-key handling logs to the unified log:

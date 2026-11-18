@@ -163,6 +163,19 @@ struct SettingsView: View {
                     .padding(.leading, 10)
             }
 
+            Section {
+                Picker("Keyboard and trackpad stay off for", selection: $settings.cleanKeyboardSeconds) {
+                    ForEach(AppSettings.cleanKeyboardChoices, id: \.self) { seconds in
+                        Text(seconds == 60 ? "1 minute" : "\(seconds) seconds").tag(seconds)
+                    }
+                }
+            } header: {
+                Text("Clean Keyboard")
+            } footer: {
+                Caption("Right-click the gear in the panel and choose Clean Keyboard. Nothing on the keyboard or trackpad ends it early. Touch ID locks the Mac, which stops it.")
+                    .padding(.leading, 10)
+            }
+
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)

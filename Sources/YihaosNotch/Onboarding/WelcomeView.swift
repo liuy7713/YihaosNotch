@@ -25,7 +25,8 @@ struct WelcomeView: View {
         _page = State(initialValue: min(max(startPage, 0), 2))
     }
 
-    static let size = NSSize(width: 640, height: 470)
+    /// Tall enough for the tour's five tips beside its demo.
+    static let size = NSSize(width: 640, height: 550)
 
     /// Development aid: `--preview-welcome N` opens the welcome screen at page N (0–2).
     static var previewPage: Int {
@@ -196,7 +197,7 @@ private struct HowToPage: View {
                       subtitle: "Quiet until something's happening. Open it whenever you like.")
             HStack(alignment: .center, spacing: 30) {
                 NotchDemo(activeTip: $activeTip, startsWithNew: returning)
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
                     Tip(symbol: "bell", title: "It speaks up on its own",
                         detail: "What's playing, your next meeting, a running timer or your charger. Turn any of them off in Settings.",
                         isActive: activeTip == 0)
@@ -209,6 +210,9 @@ private struct HowToPage: View {
                     Tip(symbol: "arrow.down.doc", title: "Drop files on it to convert",
                         detail: "HEIC to JPEG, Word or PowerPoint to PDF, MOV to MP4 and more. Saved to Downloads.",
                         isActive: activeTip == 3)
+                    Tip(symbol: "keyboard", title: "Clean the keyboard",
+                        detail: "Right-click the gear and choose Clean Keyboard. The keyboard and trackpad turn off while you wipe.",
+                        isActive: activeTip == 4)
                 }
                 .frame(width: 250, alignment: .leading)
             }

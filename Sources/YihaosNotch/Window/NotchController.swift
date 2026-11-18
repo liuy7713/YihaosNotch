@@ -42,6 +42,9 @@ final class NotchController {
     private var armSuppressedUntil = Date.distantPast
     /// While set, the panel stays open wherever the pointer is (see `greet`).
     private var greetingUntil = Date.distantPast
+    /// Clean Keyboard is running or just finished: the panel stays open wherever the
+    /// pointer is, and outside clicks or Settings don't close it.
+    private var heldOpen = false
 
     /// Development aid: `--preview-open` opens the panel at launch and keeps it open,
     /// so it can be screenshotted without hovering.
@@ -318,7 +321,7 @@ final class NotchController {
             } else if openHitRect.contains(p) {
                 closeTask?.cancel()
                 closeTask = nil
-            } else if closeTask == nil, !previewCycle, Date.now >= greetingUntil {
+            } else if closeTask == nil, !previewCycle, !heldOpen, Date.now >= greetingUntil {
                 scheduleClose()
             }
         }
@@ -327,7 +330,8 @@ final class NotchController {
     /// Clicks on the notch itself land on the gesture window (see `updateGesturePanel`),
     /// so the global monitor only matters for closing the panel on an outside click.
     private func clickedElsewhere() {
-        guard viewModel.state == .open, !previewCycle, !openHitRect.contains(NSEvent.mouseLocation) else { return }
+        guard viewModel.state == .open, !previewCycle, !heldOpen,
+              !openHitRect.contains(NSEvent.mouseLocation) else { return }
         close()
     }
 
@@ -353,9 +357,22 @@ final class NotchController {
     /// Folds the panel away (Settings is opening beneath it). The pointer may still be
     /// near the notch, so it isn't allowed to reopen it straight away.
     func dismissPanel() {
-        guard viewModel.state == .open else { return }
+        guard viewModel.state == .open, !heldOpen else { return }
         armSuppressedUntil = .now + 1
         close()
+    }
+
+    /// Keeps the panel open (opening it if need be) while Clean Keyboard shows its
+    /// countdown; letting go closes it as usual once the pointer is elsewhere.
+    func holdOpen(_ hold: Bool) {
+        guard hold != heldOpen else { return }
+        heldOpen = hold
+        if hold {
+            viewModel.showingCamera = false
+            open()
+        } else {
+            pointerMoved()
+        }
     }
 
     /// Opens the panel for a few seconds wherever the pointer is, so someone who has

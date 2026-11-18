@@ -25,6 +25,8 @@ final class MediaKeyController {
     @ObservationIgnored var canShowHUD: () -> Bool = { true }
 
     @ObservationIgnored private var wanted = false
+    /// Clean Keyboard has the keys for now (see `pause`).
+    @ObservationIgnored private var paused = false
     @ObservationIgnored private var tap: CFMachPort?
     @ObservationIgnored private var source: CFRunLoopSource?
     @ObservationIgnored private var brightnessTap: BrightnessKeyTap?
@@ -89,11 +91,23 @@ final class MediaKeyController {
         stopTap()
     }
 
+    /// Steps aside while Clean Keyboard runs, so nothing here acts on a key press it
+    /// swallows; `resume` picks up again if it's still wanted.
+    func pause() {
+        paused = true
+        stopTap()
+    }
+
+    func resume() {
+        paused = false
+        refreshPermission()
+    }
+
     /// Starts the tap once permission is there, or tears it down if it was revoked.
     func refreshPermission() {
         hasPermission = AXIsProcessTrusted()
         log.info("permission trusted=\(self.hasPermission) wanted=\(self.wanted) running=\(self.isRunning)")
-        if hasPermission, wanted { startTap() }
+        if hasPermission, wanted, !paused { startTap() }
         if !hasPermission { stopTap() }
     }
 
