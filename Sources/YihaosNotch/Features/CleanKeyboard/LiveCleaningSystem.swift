@@ -14,8 +14,6 @@ final class LiveCleaningSystem: CleaningSystem {
     weak var session: CleanKeyboardSession?
     /// Keeps the notch panel open (or lets it close).
     var holdPanel: (Bool) -> Void = { _ in }
-    /// The cleaning deadline for the notch's wings, nil when not cleaning.
-    var showWings: (UInt64?) -> Void = { _ in }
 
     private let settings: AppSettings
     private let mediaKeys: MediaKeyController
@@ -35,6 +33,8 @@ final class LiveCleaningSystem: CleaningSystem {
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var activity: NSObjectProtocol?
     private var screenFrame: CGRect?
+    /// Handing focus back, once nothing is held down any more.
+    private var pendingLeave: Task<Void, Never>?
     private static let dockHolder = "Clean Keyboard"
 
     init(settings: AppSettings, mediaKeys: MediaKeyController, updates: UpdateService) {
@@ -70,6 +70,7 @@ final class LiveCleaningSystem: CleaningSystem {
     // MARK: Starting
 
     func enterLeadIn(seconds: Int, onEscape: @escaping @MainActor () -> Void) {
+        if pendingLeave != nil { finishLeaving() }
         let front = NSWorkspace.shared.frontmostApplication
         previousApp = front?.processIdentifier == getpid() ? nil : front
         activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical],
@@ -111,7 +112,13 @@ final class LiveCleaningSystem: CleaningSystem {
                     self.interrupt("the cleaning tap stopped")
                 }
             },
-            emergency: { cursor.release() })
+            emergency: { cursor.release() },
+            onCapsLock: { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.tapID == id else { return }
+                    self.restoreCapsLock()
+                }
+            })
         tapID = id
         guard tap.start(deadline: deadline, drainUntil: drainUntil, hardDeadline: hardDeadline,
                         heldKeys: Self.heldKeys(), heldButtons: Self.heldButtons())
@@ -156,14 +163,44 @@ final class LiveCleaningSystem: CleaningSystem {
     }
 
     private static func restore(capsLock wasOn: Bool) {
-        if CapsLock.isOn != wasOn, !CapsLock.set(wasOn) {
+        guard CapsLock.isOn != wasOn else { return }
+        if CapsLock.set(wasOn) {
+            log.info("Caps Lock put back \(wasOn ? "on" : "off", privacy: .public)")
+        } else {
             log.error("couldn't put Caps Lock back")
         }
     }
 
     func leave(completed: Bool) {
         removeObservers()
-        overlay?.hide(animated: completed)
+        log.info("cleaning ended\(completed ? "" : " early")")
+        // A cloth still on Delete or Return would repeat into the app focus goes back to
+        // once the drain is over. Until it's lifted (10 s at most), this app stays in
+        // front with the overlay, now invisible, taking the keys.
+        guard completed, !handsOff() else {
+            overlay?.hide(animated: completed)
+            overlay = nil
+            finishLeaving()
+            return
+        }
+        overlay?.fadeOut()
+        log.info("a key is still down; focus goes back once it's let go")
+        let started = Monotonic.now()
+        pendingLeave = Task { [weak self] in
+            while let self, !self.handsOff(), Monotonic.now() < started + Monotonic.nanoseconds(10) {
+                try? await Task.sleep(for: .milliseconds(50))
+                if Task.isCancelled { return }
+            }
+            self?.finishLeaving()
+        }
+    }
+
+    /// The rest of leaving: the overlay, the menu, focus and the Dock icon. Does
+    /// nothing once done.
+    private func finishLeaving() {
+        pendingLeave?.cancel()
+        pendingLeave = nil
+        overlay?.hide(animated: false)
         overlay = nil
         if let savedMenu { NSApp.mainMenu = savedMenu }
         savedMenu = nil
@@ -177,7 +214,6 @@ final class LiveCleaningSystem: CleaningSystem {
         if let activity { ProcessInfo.processInfo.endActivity(activity) }
         activity = nil
         screenFrame = nil
-        log.info("cleaning ended\(completed ? "" : " early")")
     }
 
     func resumeMediaKeys() { mediaKeys.resume() }
@@ -192,7 +228,7 @@ final class LiveCleaningSystem: CleaningSystem {
         lastPhase = phase
         refusalHold?.cancel()
         refusalHold = nil
-        if case .cleaning(let until, _) = phase { showWings(until) } else { showWings(nil) }
+        announce(phase)
         // A refusal that ended a session (secure input, say) stays a few seconds,
         // wherever the pointer is, so the keyboard doesn't just flicker off and on.
         if previous.isRunning, !phase.holdsPanel, phase != .idle {
@@ -205,6 +241,19 @@ final class LiveCleaningSystem: CleaningSystem {
             return
         }
         holdPanel(phase.holdsPanel)
+    }
+
+    /// VoiceOver hears when input goes off and comes back, wherever its cursor is.
+    private func announce(_ phase: CleanKeyboardSession.Phase) {
+        let text: String
+        switch phase {
+        case .cleaning(_, let seconds): text = "Keyboard and trackpad are off for \(seconds) seconds"
+        case .done: text = "Back on"
+        default: return
+        }
+        var announcement = AttributedString(text)
+        announcement.accessibilitySpeechAnnouncementPriority = .high
+        AccessibilityNotification.Announcement(announcement).post()
     }
 
     // MARK: Interruptions
@@ -340,6 +389,16 @@ final class CleaningOverlay {
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.3
             panel.animator().alphaValue = 1
+        }
+    }
+
+    /// Invisible but still in front and taking the keys.
+    func fadeOut() {
+        panel.onEscape = nil
+        let panel = panel
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.35
+            panel.animator().alphaValue = 0
         }
     }
 

@@ -110,6 +110,7 @@ struct OpenPanelView: View {
                         .layoutPriority(1)
                         .opacity(cleaner.phase.holdsPanel ? 0.35 : 1)
                         .allowsHitTesting(!cleaner.phase.holdsPanel)
+                        .disabled(cleaner.phase.holdsPanel)
                 }
                 .font(.system(size: 12, weight: .semibold))
             }
@@ -126,6 +127,7 @@ struct OpenPanelView: View {
                 }
                 .opacity(cleaner.phase.holdsPanel ? 0.35 : 1)
                 .allowsHitTesting(!cleaner.phase.holdsPanel)
+                .disabled(cleaner.phase.holdsPanel)
                 HeaderIconButton(systemName: "gearshape.fill",
                                  label: updates.available == nil ? "Settings" : "Settings: an update is available",
                                  badge: updates.available != nil) {
@@ -141,6 +143,7 @@ struct OpenPanelView: View {
                 }
                 .opacity(cleaner.phase.holdsPanel ? 0.35 : 1)
                 .allowsHitTesting(!cleaner.phase.holdsPanel)
+                .disabled(cleaner.phase.holdsPanel)
                 batteryIndicator
                     .padding(.leading, 6)
             }

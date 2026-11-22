@@ -303,7 +303,7 @@ private struct PermissionsPage: View {
     /// hasn't been allowed yet, a button leads to the setting.
     @ViewBuilder private var hudControl: some View {
         HStack(spacing: 10) {
-            if settings.replaceSystemHUD, !mediaKeys.isRunning {
+            if settings.replaceSystemHUD, !mediaKeys.isRunning, !mediaKeys.isPaused {
                 Button("Open Settings…") {
                     mediaKeys.refreshPermission()
                     mediaKeys.openAccessibilitySettings()

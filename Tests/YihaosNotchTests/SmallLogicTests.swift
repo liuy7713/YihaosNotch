@@ -66,5 +66,15 @@ struct WelcomeGatingTests {
         #expect(!AppSettings.needsWelcome(completed: AppSettings.welcomeVersion))
         // 1.7 added converting to the tour, so it must be above what 1.6 saved.
         #expect(AppSettings.welcomeVersion >= 2)
+        // 1.9 added Clean Keyboard: those who finished 1.7's tour see it again.
+        #expect(AppSettings.needsWelcome(completed: 2))
+        #expect(AppSettings.welcomeVersion >= 3)
+    }
+
+    @Test func theCleanSecondsFlagIsReadOnlyWithANumber() {
+        #expect(AppSettings.cleanSecondsOverride(arguments: ["app", "--clean-seconds", "5"]) == 5)
+        #expect(AppSettings.cleanSecondsOverride(arguments: ["app", "--clean-seconds"]) == nil)
+        #expect(AppSettings.cleanSecondsOverride(arguments: ["app", "--clean-seconds", "x"]) == nil)
+        #expect(AppSettings.cleanSecondsOverride(arguments: ["app"]) == nil)
     }
 }

@@ -10,9 +10,11 @@ private let log = Logger(subsystem: "com.yihao.YihaosNotch", category: "CleanKey
 ///
 /// One tap at the HID level, where input enters the window server, so nothing gets past
 /// it to any app. It runs on its own thread, and its callback does a fixed, tiny amount
-/// of work: it reads the deadlines from atomics and asks `CleaningPolicy`, never
-/// touching the main thread. So the keyboard comes back at the deadline even if the
-/// rest of the app is stuck.
+/// of work: it reads the deadlines from atomics and asks `CleaningPolicy`. The one
+/// exception is reading a system key (the power button, media keys), which needs the
+/// main thread; that wait is capped, one at a time, and skipped while the main thread
+/// is slow (see `systemDefined`). So the keyboard comes back at the deadline even if
+/// the rest of the app is stuck.
 ///
 /// Layers that end a session, from the inside out:
 /// 1. the callback itself passes everything once the deadline (plus the drain) is past;
@@ -28,6 +30,13 @@ final class CleaningTap: @unchecked Sendable {
     let drainUntil = Atomic<UInt64>(0)
     let hardDeadline = Atomic<UInt64>(0)
     private let reported = Atomic<Bool>(false)
+    /// Set by the main thread when it runs the watchdog's ping.
+    private let mainAnswered = Atomic<Bool>(true)
+    /// A system key is being read on the main thread.
+    private let decoding = Atomic<Bool>(false)
+    /// Only ever touched on the tap's thread: after a read timed out, system keys aren't
+    /// read (just let through) until this time.
+    private var decodeBackoffUntil: UInt64 = 0
 
     /// Called (on the main queue, once) when the tap stopped by itself or was stopped
     /// by the watchdog.
@@ -35,6 +44,9 @@ final class CleaningTap: @unchecked Sendable {
     /// Called from the watchdog before it forces the tap off or quits, to show the
     /// pointer again; must be safe on any thread.
     private let emergency: @Sendable () -> Void
+    /// Called (on the main queue) when Caps Lock was pressed during cleaning: the
+    /// tap can swallow the press but not the toggle, so it's put back at once.
+    private let onCapsLock: @Sendable () -> Void
 
     /// The tap and its run loop, touched only under `lock`: the main thread stops them
     /// while the tap's thread or the watchdog may be using them.
@@ -47,9 +59,16 @@ final class CleaningTap: @unchecked Sendable {
     /// Only ever touched on the watchdog's queue.
     private var watchdogState = Watchdog.State()
 
-    init(onStopped: @escaping @Sendable () -> Void, emergency: @escaping @Sendable () -> Void) {
+    init(onStopped: @escaping @Sendable () -> Void, emergency: @escaping @Sendable () -> Void,
+         onCapsLock: @escaping @Sendable () -> Void) {
         self.onStopped = onStopped
         self.emergency = emergency
+        self.onCapsLock = onCapsLock
+    }
+
+    fileprivate func capsLockPressed() {
+        let onCapsLock = onCapsLock
+        DispatchQueue.main.async { onCapsLock() }
     }
 
     /// Starts swallowing input until `deadline`. False if macOS refused the tap, or
@@ -155,10 +174,12 @@ final class CleaningTap: @unchecked Sendable {
 
     private func watch() {
         let enabled = lock.withLock { tap }.map { CGEvent.tapIsEnabled(tap: $0) } ?? false
+        let answered = mainAnswered.exchange(false, ordering: .sequentiallyConsistent)
+        DispatchQueue.main.async { [weak self] in self?.mainAnswered.store(true, ordering: .sequentiallyConsistent) }
         let action = Watchdog.tick(now: Monotonic.now(),
                                    hardDeadline: hardDeadline.load(ordering: .sequentiallyConsistent),
                                    armed: armed.load(ordering: .sequentiallyConsistent),
-                                   tapEnabled: enabled, state: &watchdogState)
+                                   tapEnabled: enabled, mainAnswered: answered, state: &watchdogState)
         switch action {
         case .none:
             break
@@ -173,7 +194,7 @@ final class CleaningTap: @unchecked Sendable {
             emergency()
             report()
         case .terminate:
-            log.fault("watchdog: the cleaning tap won't turn off; quitting so input comes back")
+            log.fault("watchdog: the tap won't turn off or the app is hung; quitting so input comes back")
             emergency()
             // Straight out, without the clean-up `exit` runs on this thread while others
             // may hold locks it needs. The tap goes with the process.
@@ -200,6 +221,7 @@ final class CleaningTap: @unchecked Sendable {
 
 extension CleaningPolicy.Input {
     /// Reads only what the policy needs: the type, and a key code or button number.
+    /// (System keys, type 14, are read by `CleaningTap.systemDefined`.)
     init(type: CGEventType, event: CGEvent) {
         switch type {
         case .tapDisabledByTimeout: self = .tapDisabledByTimeout
@@ -211,17 +233,60 @@ extension CleaningPolicy.Input {
         case .flagsChanged: self = .flagsChanged(code: event.getIntegerValueField(.keyboardEventKeycode))
         case .leftMouseUp, .rightMouseUp, .otherMouseUp:
             self = .buttonUp(event.getIntegerValueField(.mouseEventButtonNumber))
-        case CGEventType(rawValue: 14):
-            // NX_SYSDEFINED: media keys, and the power button (aux subtype 8, key type
-            // NX_POWER_KEY = 6). Rare, so reading it through NSEvent costs nothing.
-            if let nsEvent = NSEvent(cgEvent: event), nsEvent.subtype.rawValue == 8,
-               (nsEvent.data1 & 0xFFFF0000) >> 16 == 6 {
-                self = .powerKey
-            } else {
-                self = .other
-            }
         default: self = .other
         }
+    }
+}
+
+extension CleaningTap {
+    static let systemKeyEvent = CGEventType(rawValue: 14)!
+
+    /// NX_SYSDEFINED events (media keys, the power button) only say what they are
+    /// through `NSEvent`, which must be made on the main thread (off it, macOS kills
+    /// the app on a Caps Lock press). So the main thread reads it, with a short limit.
+    /// If it's busy, the event is let through, as the power button must never be lost;
+    /// and while one read is waiting, or for a second after one timed out, the next
+    /// aren't queued behind it, so a slow main thread can't back up input.
+    fileprivate func systemDefined(_ event: CGEvent) -> CleaningPolicy.Input {
+        Self.withModifiers(readSystemKey(event), event)
+    }
+
+    private func readSystemKey(_ event: CGEvent) -> CleaningPolicy.Input {
+        let start = Monotonic.now()
+        guard start >= decodeBackoffUntil,
+              decoding.compareExchange(expected: false, desired: true, ordering: .sequentiallyConsistent).exchanged
+        else { return .powerKey }
+        final class Reading: @unchecked Sendable {
+            var subtype = -1
+            var data1 = 0
+        }
+        let reading = Reading()
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) let event = event
+        DispatchQueue.main.async { [self] in
+            if let nsEvent = NSEvent(cgEvent: event), nsEvent.type == .systemDefined {
+                reading.subtype = Int(nsEvent.subtype.rawValue)
+                reading.data1 = nsEvent.data1
+                log.debug("system key: subtype \(reading.subtype) data1 \(String(reading.data1, radix: 16), privacy: .public)")
+            }
+            self.decoding.store(false, ordering: .sequentiallyConsistent)
+            done.signal()
+        }
+        guard done.wait(timeout: .now() + .milliseconds(50)) == .success else {
+            decodeBackoffUntil = start + Monotonic.nanoseconds(1)
+            log.info("system key not read in time; let through")
+            return .powerKey
+        }
+        return CleaningPolicy.systemDefined(subtype: reading.subtype, data1: reading.data1)
+    }
+
+    /// Control, Command or Option with the power button restart or shut down without
+    /// asking; with a palm on them, it's held back.
+    private static func withModifiers(_ input: CleaningPolicy.Input, _ event: CGEvent) -> CleaningPolicy.Input {
+        guard input == .powerKey,
+              !event.flags.intersection([.maskControl, .maskCommand, .maskAlternate]).isEmpty
+        else { return input }
+        return .powerKeyWithModifiers
     }
 }
 
@@ -229,7 +294,10 @@ private func cleaningTapCallback(proxy: CGEventTapProxy, type: CGEventType, even
                                  refcon: UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>? {
     guard let refcon else { return Unmanaged.passUnretained(event) }
     let owner = Unmanaged<CleaningTap>.fromOpaque(refcon).takeUnretainedValue()
-    let decision = CleaningPolicy.decide(CleaningPolicy.Input(type: type, event: event),
+    let input = type == CleaningTap.systemKeyEvent
+        ? owner.systemDefined(event)
+        : CleaningPolicy.Input(type: type, event: event)
+    let decision = CleaningPolicy.decide(input,
                                          now: Monotonic.now(),
                                          deadline: owner.deadline.load(ordering: .sequentiallyConsistent),
                                          drainUntil: owner.drainUntil.load(ordering: .sequentiallyConsistent),
@@ -237,6 +305,7 @@ private func cleaningTapCallback(proxy: CGEventTapProxy, type: CGEventType, even
                                          memory: &owner.memory)
     switch decision {
     case .swallow:
+        if input == .flagsChanged(code: CleaningPolicy.capsLockCode) { owner.capsLockPressed() }
         return nil
     case .pass:
         return Unmanaged.passUnretained(event)

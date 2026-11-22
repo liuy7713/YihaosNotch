@@ -94,13 +94,13 @@ final class AppSettings {
         cleanKeyboardChoices.contains(stored) ? stored : 30
     }
     /// Development aid: `--clean-seconds 5` cleans for that long instead (5 to 60).
-    nonisolated static let cleanSecondsOverride: Int? = {
-        let arguments = CommandLine.arguments
+    nonisolated static let cleanSecondsOverride = cleanSecondsOverride(arguments: CommandLine.arguments)
+    nonisolated static func cleanSecondsOverride(arguments: [String]) -> Int? {
         guard let index = arguments.firstIndex(of: "--clean-seconds"), index + 1 < arguments.count,
               let seconds = Int(arguments[index + 1])
         else { return nil }
         return seconds
-    }()
+    }
     /// What a session uses: the setting, or the development override.
     var cleanKeyboardDuration: Int { Self.cleanSecondsOverride ?? cleanKeyboardSeconds }
 

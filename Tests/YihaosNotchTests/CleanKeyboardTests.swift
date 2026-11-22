@@ -77,6 +77,30 @@ struct CleaningPolicyTests {
         #expect(decide(.powerKey, at: 10_500, memory: &memory) == .pass)
     }
 
+    /// Control, Command or Option with it would restart or shut down without saving.
+    @Test func thePowerButtonWithModifiersIsHeldBackOnlyWhileCleaning() {
+        var memory = Policy.Memory()
+        #expect(decide(.powerKeyWithModifiers, at: 1, memory: &memory) == .swallow)
+        #expect(decide(.powerKeyWithModifiers, at: deadline, memory: &memory) == .pass)
+        #expect(decide(.powerKeyWithModifiers, at: 1, armed: false, memory: &memory) == .passAndStop)
+    }
+
+    @Test(arguments: [
+        (1, 0, Policy.Input.powerKey),                    // NX_SUBTYPE_POWER_KEY
+        (16, 0, .powerKey),                               // the Touch ID button
+        (11, 0, .powerKey),                               // sleep
+        (10, 0, .other),                                  // eject
+        (211, 1, .other),                                 // sent around Caps Lock
+        (8, 0x0006_0A00, .powerKey),                      // auxiliary NX_POWER_KEY, down
+        (8, 0x0004_0A00, .flagsChanged(code: 57)),        // auxiliary Caps Lock
+        (8, 0x0000_0A00, .other),                         // volume up
+        (8, 0x0010_0A00, .other),                         // play/pause
+        (7, 0x0000_0001, .other),                         // mouse buttons
+    ])
+    func systemKeysAreTold(_ subtype: Int, _ data1: Int, _ expected: Policy.Input) {
+        #expect(Policy.systemDefined(subtype: subtype, data1: data1) == expected)
+    }
+
     @Test func aTapMacOSTookAwayIsNeverTurnedBackOn() {
         var memory = Policy.Memory()
         #expect(decide(.tapDisabledByUserInput, at: 1, memory: &memory) == .passAndStop)
@@ -87,8 +111,34 @@ struct WatchdogTests {
     let hard: UInt64 = 100_000_000_000
     typealias State = Watchdog.State
 
-    private func tick(_ now: UInt64, armed: Bool, enabled: Bool, _ state: inout State) -> Watchdog.Action {
-        Watchdog.tick(now: now, hardDeadline: hard, armed: armed, tapEnabled: enabled, state: &state)
+    private func tick(_ now: UInt64, armed: Bool, enabled: Bool, mainAnswered: Bool = true,
+                      _ state: inout State) -> Watchdog.Action {
+        Watchdog.tick(now: now, hardDeadline: hard, armed: armed, tapEnabled: enabled,
+                      mainAnswered: mainAnswered, state: &state)
+    }
+
+    /// A hung app would stay in front with the keyboard: past the hard deadline, six
+    /// unanswered checks in a row (3 s) quit it.
+    @Test func aHungMainThreadQuitsTheAppAfterTheHardDeadline() {
+        var state = State()
+        let late = hard + Watchdog.mainHangGrace
+        for tick in 0..<(Watchdog.mainHangTicks - 1) {
+            #expect(self.tick(late + UInt64(tick), armed: false, enabled: false, mainAnswered: false, &state) == .none)
+        }
+        #expect(tick(late + 10, armed: false, enabled: false, mainAnswered: false, &state) == .terminate)
+    }
+
+    @Test func aSlowMainThreadBeforeTheDeadlineOrOneThatAnswersIsLeftAlone() {
+        var state = State()
+        for tick in 0..<20 {
+            #expect(self.tick(UInt64(tick), armed: true, enabled: true, mainAnswered: false, &state) == .none)
+        }
+        state = State()
+        let late = hard + Watchdog.mainHangGrace
+        for tick in 0..<20 {
+            #expect(self.tick(late + UInt64(tick), armed: false, enabled: false,
+                              mainAnswered: tick % 5 == 0, &state) == .none)
+        }
     }
 
     @Test func quietWhileAllIsWell() {
@@ -369,6 +419,17 @@ struct CleanKeyboardSessionTests {
         #expect(system.calls.contains("stopBlocking(drain: false)"))
     }
 
+    /// A password dialog opening mid-way would get the cloth's typing.
+    @Test func secureInputTurningOnMidWayEndsIt() {
+        let session = session()
+        session.request()
+        system.advance(3 + 10)
+        guard case .cleaning = session.phase else { Issue.record("not cleaning"); return }
+        system.secureInput = true
+        system.advance(0.6)
+        #expect(session.phase == .refused(.secureInput))
+    }
+
     @Test func thePanelIsHeldFromTheLeadInUntilBackOnIsGone() {
         let session = session()
         session.request()
@@ -390,12 +451,5 @@ struct CleanKeyboardSettingTests {
     @Test(arguments: [(15, 15), (30, 30), (60, 60), (0, 30), (45, 30), (-1, 30)])
     func onlyTheOfferedLengthsAreKept(_ stored: Int, _ used: Int) {
         #expect(AppSettings.cleanKeyboardSeconds(stored: stored) == used)
-    }
-
-    @Test func cleaningTakesTheWingsFromEverything() {
-        let activity = NotchViewModel.prioritise(cleaning: 42, transient: .volume(level: 0.5, muted: false),
-                                                 timerDone: true, timerRunning: true, hasTrack: true,
-                                                 isPlaying: true, recentlyPlayed: true, event: nil)
-        #expect(activity == .cleaning(until: 42))
     }
 }

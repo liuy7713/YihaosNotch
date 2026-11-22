@@ -100,7 +100,9 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--clean-seconds N` | Clean Keyboard runs for N seconds (5 to 60) instead of the Settings length, for quick tests. |
 | `--update-feed URL` | Reads the release description from URL (a copy of GitHub's `releases/latest` JSON) instead of GitHub, checks two seconds after launch, and accepts the image from any address; the signature check still applies, so only a build signed with your identity installs. Logs the permission state at launch (category Updater), for checking an update keeps it. |
 
-The media-key handling logs to the unified log:
+The media-key handling and Clean Keyboard (category CleanKeyboard; at debug level
+it logs each system key's subtype, which is how the Touch ID button's was found) log
+to the unified log:
 `log stream --predicate 'subsystem == "com.yihao.YihaosNotch"' --level debug`.
 
 The app icon is drawn in code (`scripts/icon/render-icon.swift`); run
@@ -115,7 +117,11 @@ The app icon is drawn in code (`scripts/icon/render-icon.swift`); run
 Run it before every commit. The tests (`Tests/YihaosNotchTests`, Swift Testing) cover
 the pure logic where past bugs landed: what the closed notch shows, lyrics parsing,
 meeting links (look-alike domains, redirects, https only), player data, which copy
-carries on when two run, and the version bump. They never touch Calendar, the camera,
+carries on when two run, and the version bump. Clean Keyboard's rules are kept apart
+from the system so they can be tested: which events the tap swallows
+(`CleaningPolicy`), when the watchdog steps in (`Watchdog`), and the session's steps,
+run against a fake system (`CleanKeyboardSession` with `CleaningSystem`). A real
+session is checked by hand, with `--clean-seconds 5`. They never touch Calendar, the camera,
 Apple events or event taps: those would ask for permissions on Terminal's behalf, or
 control the real Music app. Window behaviour is checked by eye with the flags above.
 
@@ -133,6 +139,7 @@ control the real Music app. Window behaviour is checked by eye with the flags ab
 | `Features/System` | Volume/brightness keys (event tap, opt-in), headphone connection |
 | `Features/Timer` | Countdown timer, opened from the header clock |
 | `Features/Convert` | Files dropped on the notch: which formats each kind can become (`ConvertCatalog`), the conversions (ImageIO, PDFKit, AVFoundation, the text system, Microsoft Word over AppleScript), Markdown to HTML with Foundation's parser, and saving without replacing anything |
+| `Features/CleanKeyboard` | Turning input off for wiping: one HID event tap on its own thread, its rules and watchdog, the session's steps, the overlay, and putting Caps Lock back |
 | `Features/Update` | Daily check of GitHub's latest release; installs it by swapping the bundle after checking the image's SHA-256 and that it's signed by the same certificate |
 | `Settings/` | Settings window |
 | `Onboarding/` | First-launch welcome: what it is, how to open it, permissions one at a time |

@@ -29,6 +29,9 @@ enum CleaningPolicy {
         /// The power (Touch ID) button: always let through, as pressing it locks the
         /// Mac, the one way to end cleaning early.
         case powerKey
+        /// The power button with Control, Command or Option down: held back while
+        /// cleaning, as those make it restart or shut down without saving.
+        case powerKeyWithModifiers
         /// Everything else: pointer movement, clicks, scrolling, gestures, media keys.
         case other
         case tapDisabledByTimeout
@@ -54,6 +57,32 @@ enum CleaningPolicy {
         var swallowedKeys: Set<Int64> = []
     }
 
+    /// Caps Lock's key code: its toggle happens in the keyboard driver, before any tap,
+    /// so the tap reports it to be put straight back.
+    static let capsLockCode: Int64 = 57
+
+    /// An NX_SYSDEFINED event (media keys, the power button), from its subtype and
+    /// data1 as `NSEvent` reads them. The power events always get through: the power
+    /// key (1), sleep, restart and shut down (11–13), and 16, which is what the Touch ID
+    /// button sends on a MacBook (seen on macOS 27, one per press). Eject (10) doesn't:
+    /// it sits on the top row of external keyboards, under the cloth, and isn't a way out. Older
+    /// keyboards send the power key as an auxiliary key (subtype 8) of type
+    /// NX_POWER_KEY (6). Caps Lock can also come as an auxiliary key (type 4).
+    static func systemDefined(subtype: Int, data1: Int) -> Input {
+        switch subtype {
+        case 1, 11...13, 16:
+            return .powerKey
+        case 8:
+            switch (data1 & 0xFFFF0000) >> 16 {
+            case 6: return .powerKey
+            case 4: return .flagsChanged(code: capsLockCode)
+            default: return .other
+            }
+        default:
+            return .other
+        }
+    }
+
     static func decide(_ input: Input, now: UInt64, deadline: UInt64, drainUntil: UInt64, armed: Bool,
                        memory: inout Memory) -> Decision {
         switch input {
@@ -65,6 +94,9 @@ enum CleaningPolicy {
             return .passAndStop
         case .powerKey:
             return armed ? .pass : .passAndStop
+        case .powerKeyWithModifiers:
+            guard armed else { return .passAndStop }
+            return now < deadline ? .swallow : .pass
         default:
             break
         }
@@ -105,7 +137,9 @@ enum CleaningPolicy {
 }
 
 /// The watchdog's rules, checked twice a second on its own queue: it never waits on
-/// the main thread, so a hang there can't keep the keyboard off.
+/// the main thread, so a hang there can't keep the keyboard off. It does check the main
+/// thread still answers: a hung app left in front, with its overlay key, would keep
+/// the keyboard looking dead even with the tap gone.
 enum Watchdog {
     enum Action: Equatable {
         case none
@@ -123,13 +157,25 @@ enum Watchdog {
         var disabledTicks = 0
         /// When it first forced the tap off.
         var forcedAt: UInt64?
+        /// Checks in a row the main thread hasn't answered.
+        var mainMissedTicks = 0
     }
 
     /// How long after forcing the tap off a tap still on makes the app quit.
     static let terminateGrace = Monotonic.nanoseconds(5)
+    /// Past the hard deadline by this much with the main thread silent for
+    /// `mainHangTicks` checks in a row (3 s), the app quits: hung, it would stay in
+    /// front and keep the keyboard. (Counted in checks, not time, so time asleep, when
+    /// neither runs, never counts as a hang.)
+    static let mainHangGrace = Monotonic.nanoseconds(1)
+    static let mainHangTicks = 6
 
     static func tick(now: UInt64, hardDeadline: UInt64, armed: Bool, tapEnabled: Bool,
-                     state: inout State) -> Action {
+                     mainAnswered: Bool = true, state: inout State) -> Action {
+        state.mainMissedTicks = mainAnswered ? 0 : state.mainMissedTicks + 1
+        if now >= hardDeadline &+ mainHangGrace, state.mainMissedTicks >= mainHangTicks {
+            return .terminate
+        }
         if now >= hardDeadline, armed || tapEnabled {
             // Always try turning it off first (the first check can come late, after
             // sleep), and quit only if it's still on well after that.

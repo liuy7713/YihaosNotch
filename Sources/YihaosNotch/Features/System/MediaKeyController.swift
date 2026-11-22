@@ -17,6 +17,9 @@ private let log = Logger(subsystem: "com.yihao.YihaosNotch", category: "MediaKey
 final class MediaKeyController {
     private(set) var hasPermission = AXIsProcessTrusted()
     private(set) var isRunning = false
+    /// Clean Keyboard has the keys for now (see `pause`): not running, but not because
+    /// anything is missing.
+    private(set) var isPaused = false
 
     @ObservationIgnored var onVolume: ((_ level: Float, _ muted: Bool) -> Void)?
     @ObservationIgnored var onBrightness: ((_ level: Float) -> Void)?
@@ -25,8 +28,6 @@ final class MediaKeyController {
     @ObservationIgnored var canShowHUD: () -> Bool = { true }
 
     @ObservationIgnored private var wanted = false
-    /// Clean Keyboard has the keys for now (see `pause`).
-    @ObservationIgnored private var paused = false
     @ObservationIgnored private var tap: CFMachPort?
     @ObservationIgnored private var source: CFRunLoopSource?
     @ObservationIgnored private var brightnessTap: BrightnessKeyTap?
@@ -62,10 +63,7 @@ final class MediaKeyController {
         wanted = true
         refreshPermission()
         guard !hasPermission else { return }
-        if prompt {
-            // The value of kAXTrustedCheckOptionPrompt, which Swift 6 won't read as a global.
-            AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
-        }
+        if prompt { AccessibilityAccess.ask() }
         // This app is rarely active, so the activation check alone can miss a grant made
         // in System Settings (or one lost to a new signing identity and given back).
         // Watch for it until it arrives: every second at first, then every 5 s, and
@@ -94,12 +92,12 @@ final class MediaKeyController {
     /// Steps aside while Clean Keyboard runs, so nothing here acts on a key press it
     /// swallows; `resume` picks up again if it's still wanted.
     func pause() {
-        paused = true
+        isPaused = true
         stopTap()
     }
 
     func resume() {
-        paused = false
+        isPaused = false
         refreshPermission()
     }
 
@@ -107,13 +105,12 @@ final class MediaKeyController {
     func refreshPermission() {
         hasPermission = AXIsProcessTrusted()
         log.info("permission trusted=\(self.hasPermission) wanted=\(self.wanted) running=\(self.isRunning)")
-        if hasPermission, wanted, !paused { startTap() }
+        if hasPermission, wanted, !isPaused { startTap() }
         if !hasPermission { stopTap() }
     }
 
     func openAccessibilitySettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
+        AccessibilityAccess.openSettings()
     }
 
     private func startTap() {
@@ -267,6 +264,21 @@ final class MediaKeyController {
         DisplayBrightness.setLevel(level)
         onBrightness?(level)
         return true
+    }
+}
+
+/// Asking for Accessibility, which both the volume and brightness keys and Clean
+/// Keyboard need.
+enum AccessibilityAccess {
+    /// Shows the system's request (once; after that macOS shows nothing).
+    static func ask() {
+        // The value of kAXTrustedCheckOptionPrompt, which Swift 6 won't read as a global.
+        AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+    }
+
+    static func openSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
     }
 }
 

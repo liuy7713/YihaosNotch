@@ -413,7 +413,7 @@ struct PillButtonStyle: ButtonStyle {
     }
 }
 
-struct TintedIconLabelStyle: LabelStyle {
+private struct TintedIconLabelStyle: LabelStyle {
     let tint: Color
 
     func makeBody(configuration: Configuration) -> some View {

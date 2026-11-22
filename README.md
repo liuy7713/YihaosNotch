@@ -102,13 +102,16 @@ of the macOS pop-up (in the header while the panel is open).
 After three seconds to lift your hands (Esc or Cancel stops it there), the keyboard,
 trackpad and any mouse turn off for 30 seconds (15 seconds or a minute in Settings)
 while you wipe them, with the screen lightly dimmed and a countdown in the middle. They
-come back on their own. Nothing on the keyboard or trackpad ends it early, but pressing
-Touch ID locks the Mac, which does; so do sleep and closing the lid. Two things can't be
-switched off: the Touch ID button, and the Caps Lock key's own toggle (the app puts
-Caps Lock back as it was). While a password field or Secure Keyboard Entry is on, macOS
-lets no app pause the keyboard, so it says so instead of starting. It turns input off
-on its own thread, and a watchdog makes sure it is back on two seconds after the end at
-the latest, quitting the app if it has to.
+come back on their own. Only Touch ID ends it early: pressing it locks the Mac (with
+Control, Command or Option held down it's ignored, as those would restart or shut down
+without saving). Sleep and closing the lid end it too. Caps Lock can't quite be switched
+off: its light may blink, but the app puts it straight back. A key still pressed at the
+end (a cloth on Delete, say) doesn't type into your document: your app gets the keyboard
+back once it's let go. While a password field or Secure Keyboard Entry is on, macOS lets
+no app pause the keyboard, so it says so instead of starting, and a password dialog
+appearing part-way ends it. It turns input off on its own thread, and a watchdog turns
+it back on within a few seconds of the end even if something goes wrong, quitting the
+app if it has to.
 
 It runs only on the built-in display, sits at 0% CPU when idle, and uses about 20–30 MB
 of memory.
@@ -140,7 +143,7 @@ can be skipped; a skipped one is asked for when its feature is first used.
 | Automation (Microsoft Word, PowerPoint, Excel) | Only when you convert a document with Word installed, or slides or a spreadsheet. Each app also asks once for access to the folder it works in (`~/Library/Caches/com.yihao.YihaosNotch/Word`, `PowerPoint` or `Excel`). Turn off "Use Microsoft Word for documents" in Settings to never ask Word. |
 | Downloads folder | macOS asks the first time a converted file is saved there (or into Desktop or Documents, if you choose those). |
 | Data from other apps | macOS asks the first time you drop a file that another app keeps in its own storage (a photo dragged out of WeChat, say). |
-| Accessibility | For Clean Keyboard, which turns the keyboard and trackpad off while it runs and passes everything straight through the moment it ends (asked for the first time you choose it), and for the optional volume/brightness indicator, which needs to catch those keys before macOS does (off by default). A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on, and only while an external keyboard is connected (anything that presents itself as one counts, such as some mouse receivers, security keys or Karabiner's virtual keyboard), the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. Settings says so too. |
+| Accessibility | For Clean Keyboard, which turns the keyboard and trackpad off while it runs and lets everything through again when it ends (asked for the first time you choose it; it reads no keys, it only holds them back), and for the optional volume/brightness indicator, which needs to catch those keys before macOS does (off by default). A Magic Keyboard's brightness keys arrive as ordinary key presses (codes 144/145), so with this on, and only while an external keyboard is connected (anything that presents itself as one counts, such as some mouse receivers, security keys or Karabiner's virtual keyboard), the app also sees key presses: on its own thread, reading nothing but the key code and passing every other key straight back. Settings says so too. |
 
 ## Privacy
 
@@ -150,7 +153,8 @@ database; turning off Synced lyrics in Settings stops them. When Spotify is play
 its album art is downloaded from Spotify's own image servers (the address Spotify
 reports). And once a day the app asks GitHub for this repository's latest release,
 which sends nothing about you; turning off Check for updates daily stops it, and an
-update downloads only when you click Update. There are no analytics.
+update downloads only when you click Update. There are no analytics. Clean Keyboard
+records nothing you press: it only holds input back.
 
 Display brightness has no public API, so it's set through Apple's private
 DisplayServices framework (as MonitorControl and similar tools do). If that ever stops
@@ -188,6 +192,13 @@ running copy restarts it on the new version.
   Calendars, Camera, or Automation (Music, Spotify), or replay the tour from
   Settings › Show Tour….
 - **No lyrics for a song:** LRCLIB doesn't have it, so none show.
+- **Clean Keyboard says "Typing is protected right now":** a password field is focused
+  somewhere, or Terminal's Secure Keyboard Entry is on (Terminal › Secure Keyboard
+  Entry); macOS lets no app pause the keyboard then. Close the field or turn it off.
+- **The keyboard still seems off after Clean Keyboard:** it can't stay off past the
+  countdown; click the window you were typing in. If it ever happens, open an issue with
+  the log: `log show --last 10m --predicate 'subsystem == "com.yihao.YihaosNotch" &&
+  category == "CleanKeyboard"'`.
 - **Brightness indicator stopped after a macOS update:** it relies on a private macOS
   framework (see Privacy); the keys fall back to the normal macOS pop-up.
 - **Still stuck?** [Open an issue](https://github.com/liuy7713/YihaosNotch/issues/new/choose)

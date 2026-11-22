@@ -8,9 +8,9 @@ private struct CleaningCopy {
     var caption: String?
 
     @MainActor
-    init?(_ phase: CleanKeyboardSession.Phase, seconds: Int) {
+    init?(_ phase: CleanKeyboardSession.Phase) {
         switch phase {
-        case .leadIn:
+        case .leadIn(_, let seconds):
             title = "Lift your hands"
             detail = "The keyboard and trackpad turn off for \(Self.duration(seconds))."
             caption = "Esc cancels."
@@ -35,22 +35,11 @@ private struct CleaningCopy {
     }
 }
 
-/// Whole seconds left until `until`, rounded up (so it reads 3, 2, 1, never 0).
-private func secondsLeft(until: UInt64, now: UInt64 = Monotonic.now()) -> Int {
-    until > now ? Int((Double(until - now) / 1_000_000_000).rounded(.up)) : 0
-}
-
-private func fractionLeft(until: UInt64, seconds: Int, now: UInt64 = Monotonic.now()) -> Double {
-    guard until > now, seconds > 0 else { return 0 }
-    return min(Double(until - now) / Double(Monotonic.nanoseconds(Double(seconds))), 1)
-}
-
 /// Takes the panel's body from "Clean Keyboard" until "Back on" has shown, and for the
 /// permission and refusal cards. Laid out like the converting panel: the big number on
 /// the left, the words on the right.
 struct CleanKeyboardPanel: View {
     @Environment(CleanKeyboardSession.self) private var session
-    @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -91,38 +80,28 @@ struct CleanKeyboardPanel: View {
         let phase = session.phase
         VStack(alignment: .leading, spacing: 12) {
             Group {
-                switch phase {
-                case .leadIn(let until):
-                    Text("\(max(secondsLeft(until: until), 1))")
-                        .contentTransition(.numericText(countsDown: true))
-                case .cleaning(let until, _):
-                    Text("\(max(secondsLeft(until: until), 1))")
-                        .contentTransition(.numericText(countsDown: true))
-                case .waitingForHands:
+                if let seconds = phase.secondsShown() {
+                    Text("\(seconds)")
+                        .contentTransition(reduceMotion ? .identity : .numericText(countsDown: true))
+                } else if phase == .waitingForHands {
                     Image(systemName: "hand.raised.fill")
                         .font(.system(size: 34, weight: .semibold))
-                case .done:
+                } else if phase == .done {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 38, weight: .semibold))
                         .foregroundStyle(Theme.charge)
-                        .transition(.scale(scale: 0.6).combined(with: .opacity))
-                default:
-                    EmptyView()
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
                 }
             }
             .font(.system(size: 44, weight: .semibold, design: .rounded).monospacedDigit())
             .foregroundStyle(Theme.primary)
             .frame(height: 52, alignment: .leading)
-            .animation(.snappy(duration: 0.3), value: phase)
-            .animation(.snappy(duration: 0.3), value: shownSeconds(phase))
+            .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: phase)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: phase.secondsShown())
 
             // Drains over the cleaning time; full for the lead-in, gone when done.
             GeometryReader { geometry in
-                let fraction: Double = switch phase {
-                case .cleaning(let until, let seconds): fractionLeft(until: until, seconds: seconds)
-                case .leadIn, .waitingForHands: 1
-                default: 0
-                }
+                let fraction = phase.fractionLeft()
                 ZStack(alignment: .leading) {
                     Capsule().fill(Theme.fillStrong)
                     Capsule().fill(Theme.primary)
@@ -137,24 +116,20 @@ struct CleanKeyboardPanel: View {
         .accessibilityLabel(accessibilityCountdown(phase))
     }
 
-    private func shownSeconds(_ phase: CleanKeyboardSession.Phase) -> Int {
-        switch phase {
-        case .leadIn(let until), .cleaning(let until, _): secondsLeft(until: until)
-        default: -1
-        }
-    }
-
     private func accessibilityCountdown(_ phase: CleanKeyboardSession.Phase) -> String {
-        switch phase {
-        case .leadIn(let until): "Starting in \(secondsLeft(until: until)) seconds"
-        case .cleaning(let until, _): "\(secondsLeft(until: until)) seconds left"
-        default: ""
+        let seconds = phase.secondsShown() ?? 0
+        let unit = seconds == 1 ? "second" : "seconds"
+        return switch phase {
+        case .leadIn: "Starting in \(seconds) \(unit)"
+        case .cleaning: "\(seconds) \(unit) left"
+        case .waitingForHands: "Waiting for your hands to lift"
+        default: "Back on"
         }
     }
 
     @ViewBuilder
     private var words: some View {
-        if let copy = CleaningCopy(session.phase, seconds: duration) {
+        if let copy = CleaningCopy(session.phase) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(copy.title)
                     .font(.system(size: 14, weight: .semibold))
@@ -188,10 +163,6 @@ struct CleanKeyboardPanel: View {
         }
     }
 
-    private var duration: Int {
-        CleanKeyboardSession.clampedSeconds(settings.cleanKeyboardDuration)
-    }
-
     private func card(symbol: String, title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(title, systemImage: symbol)
@@ -221,18 +192,16 @@ private struct PermissionCard: View {
             Label("Clean Keyboard needs Accessibility", systemImage: "keyboard")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.primary)
-            Text("macOS only lets an app with Accessibility access pause the keyboard and trackpad. Yihao's Notch uses it only while cleaning, and for volume and brightness if that's on.")
+            Text("macOS only lets an app with Accessibility access pause the keyboard and trackpad. Yihao's Notch uses it only while cleaning, and for volume and brightness if that's on. Turning it on needs an administrator.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.secondary)
                 .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
             Button(prompted ? "Open Settings…" : "Allow") {
                 if prompted {
-                    NSWorkspace.shared.open(URL(string:
-                        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                    AccessibilityAccess.openSettings()
                 } else {
-                    // The value of kAXTrustedCheckOptionPrompt, which Swift 6 won't read as a global.
-                    AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+                    AccessibilityAccess.ask()
                     session.notePermissionPrompted()
                 }
             }
@@ -262,12 +231,12 @@ struct CleaningOverlayView: View {
     @ViewBuilder
     private var card: some View {
         let phase = session.phase
-        if let copy = CleaningCopy(phase, seconds: seconds(phase)) {
+        if let copy = CleaningCopy(phase) {
             VStack(spacing: 12) {
                 Group {
                     switch phase {
-                    case .leadIn(let until), .cleaning(let until, _):
-                        Text("\(max(secondsLeft(until: until), 1))")
+                    case .leadIn, .cleaning:
+                        Text("\(phase.secondsShown() ?? 1)")
                     case .waitingForHands:
                         Image(systemName: "hand.raised.fill")
                             .font(.system(size: 64, weight: .semibold))
@@ -279,18 +248,18 @@ struct CleaningOverlayView: View {
                 }
                 .font(.system(size: 96, weight: .semibold, design: .rounded).monospacedDigit())
                 .foregroundStyle(.white)
-                .contentTransition(.numericText(countsDown: true))
+                .contentTransition(reduceMotion ? .identity : .numericText(countsDown: true))
                 .frame(height: 110)
                 Text(copy.title)
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
                 Text(copy.detail)
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(Theme.white(0.75, increased: 0.9))
                 if let caption = copy.caption {
                     Text(caption)
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(Theme.white(0.6, increased: 0.8))
                         .padding(.top, 4)
                 }
             }
@@ -298,22 +267,10 @@ struct CleaningOverlayView: View {
             .padding(.horizontal, 48)
             .padding(.vertical, 36)
             .frame(minWidth: 380)
-            .background(RoundedRectangle(cornerRadius: 32, style: .continuous).fill(.black.opacity(0.62)))
+            .background(RoundedRectangle(cornerRadius: 32, style: .continuous).fill(.black.opacity(0.72)))
             .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: phase)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: shownSeconds(phase))
+            .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: phase.secondsShown())
             .accessibilityElement(children: .combine)
         }
-    }
-
-    private func shownSeconds(_ phase: CleanKeyboardSession.Phase) -> Int {
-        switch phase {
-        case .leadIn(let until), .cleaning(let until, _): secondsLeft(until: until)
-        default: -1
-        }
-    }
-
-    private func seconds(_ phase: CleanKeyboardSession.Phase) -> Int {
-        if case .cleaning(_, let seconds) = phase { return seconds }
-        return CleanKeyboardSession.clampedSeconds(AppSettings.shared.cleanKeyboardDuration)
     }
 }

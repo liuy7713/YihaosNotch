@@ -21,7 +21,7 @@ final class CleanKeyboardSession {
         /// Accessibility isn't granted; `prompted` once the system dialog was asked for.
         case needsPermission(prompted: Bool)
         case refused(Refusal)
-        case leadIn(until: UInt64)
+        case leadIn(until: UInt64, seconds: Int)
         /// The lead-in is over but a key or button is still down.
         case waitingForHands
         case cleaning(until: UInt64, seconds: Int)
@@ -36,6 +36,31 @@ final class CleanKeyboardSession {
             }
         }
         var holdsPanel: Bool { isRunning || self == .done }
+
+        /// The countdown's deadline and the session's length, while there is one.
+        var countdown: (until: UInt64, seconds: Int)? {
+            switch self {
+            case .leadIn(let until, let seconds), .cleaning(let until, let seconds): (until, seconds)
+            default: nil
+            }
+        }
+
+        /// The whole seconds the countdown shows at `now`: rounded up, never 0.
+        func secondsShown(at now: UInt64 = Monotonic.now()) -> Int? {
+            guard let (until, _) = countdown else { return nil }
+            return max(until > now ? Int((Double(until - now) / 1_000_000_000).rounded(.up)) : 0, 1)
+        }
+
+        /// How much of the cleaning time is left, 0–1 (1 before it starts).
+        func fractionLeft(at now: UInt64 = Monotonic.now()) -> Double {
+            switch self {
+            case .leadIn, .waitingForHands: return 1
+            case .cleaning(let until, let seconds):
+                guard until > now, seconds > 0 else { return 0 }
+                return min(Double(until - now) / Double(Monotonic.nanoseconds(Double(seconds))), 1)
+            default: return 0
+            }
+        }
     }
 
     enum Refusal: Equatable {
@@ -53,7 +78,7 @@ final class CleanKeyboardSession {
         var detail: String {
             switch self {
             case .secureInput:
-                "A password field or Secure Keyboard Entry is on, and macOS lets no app pause the keyboard then. Close it and try again."
+                "A password field or Secure Keyboard Entry (in Terminal, say) is on, and macOS lets no app pause the keyboard then. Close the field or turn that off, then try again."
             case .noScreen: "Clean Keyboard shows its countdown on the built-in screen."
             case .updating: "Try again once Yihao's Notch has restarted."
             case .tapFailed: "macOS didn't allow it this time. Nothing was turned off; try again."
@@ -91,6 +116,8 @@ final class CleanKeyboardSession {
     @ObservationIgnored private let seconds: () -> Int
     @ObservationIgnored private var timers: [CleaningTimer] = []
     @ObservationIgnored private var handsWaitStarted: UInt64 = 0
+    /// This session's length, read once when it's chosen.
+    @ObservationIgnored private var sessionSeconds = 30
     /// Set once input is off, so ending knows what to undo.
     @ObservationIgnored private var blocking = false
 
@@ -113,9 +140,10 @@ final class CleanKeyboardSession {
             return
         }
         cancelTimers()
+        sessionSeconds = Self.clampedSeconds(seconds())
         let until = system.now() + Monotonic.nanoseconds(Self.leadInSeconds)
-        phase = .leadIn(until: until)
-        system.enterLeadIn(seconds: Self.clampedSeconds(seconds()), onEscape: { [weak self] in self?.cancel() })
+        phase = .leadIn(until: until, seconds: sessionSeconds)
+        system.enterLeadIn(seconds: sessionSeconds, onEscape: { [weak self] in self?.cancel() })
         schedule(at: until) { [weak self] in self?.leadInFinished() }
     }
 
@@ -146,7 +174,7 @@ final class CleanKeyboardSession {
     }
 
     private func beginCleaning() {
-        let seconds = Self.clampedSeconds(seconds())
+        let seconds = sessionSeconds
         let deadline = system.now() + Monotonic.nanoseconds(Double(seconds))
         system.pauseMediaKeys()
         system.saveCapsLock()
@@ -160,13 +188,22 @@ final class CleanKeyboardSession {
         }
         system.hideCursor()
         phase = .cleaning(until: deadline, seconds: seconds)
-        // Activating this app can end someone else's secure input, or not; if it's
-        // still on, the keyboard isn't really off.
-        schedule(at: system.now() + Monotonic.nanoseconds(0.2)) { [weak self] in
-            guard let self, case .cleaning = phase, system.isSecureInputOn() else { return }
-            finish(.showing(.refused(.secureInput)))
-        }
+        // Activating this app can end someone else's secure input, or not; and a
+        // password dialog can open mid-way. Either way the keyboard isn't really off
+        // then, and the cloth would type into the password field.
+        watchSecureInput(after: 0.2)
         schedule(at: deadline) { [weak self] in self?.finish(.completed) }
+    }
+
+    private func watchSecureInput(after seconds: Double) {
+        schedule(at: system.now() + Monotonic.nanoseconds(seconds)) { [weak self] in
+            guard let self, case .cleaning = phase else { return }
+            if system.isSecureInputOn() {
+                finish(.showing(.refused(.secureInput)))
+            } else {
+                watchSecureInput(after: 0.5)
+            }
+        }
     }
 
     // MARK: Ending

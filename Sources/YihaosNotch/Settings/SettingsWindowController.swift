@@ -93,9 +93,11 @@ extension NSWindow {
             return
         }
         // Centred on the notch, which is the middle of the whole screen (a Dock at the
-        // side moves the middle of the usable area).
+        // side moves the middle of the usable area). The gap under the menu bar shrinks
+        // on a small screen (Larger Text), so the bottom isn't cut off.
+        let gap = min(24, max(0, screen.visibleFrame.height - frame.height))
         setFrameTopLeftPoint(NSPoint(x: screen.frame.midX - frame.width / 2,
-                                     y: screen.visibleFrame.maxY - 24))
+                                     y: screen.visibleFrame.maxY - gap))
     }
 }
 

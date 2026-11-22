@@ -148,7 +148,7 @@ struct SettingsView: View {
                     .onChange(of: settings.replaceSystemHUD) { _, enabled in
                         if enabled { mediaKeys.enable(prompt: true) } else { mediaKeys.disable() }
                     }
-                if settings.replaceSystemHUD && !mediaKeys.isRunning {
+                if settings.replaceSystemHUD && !mediaKeys.isRunning && !mediaKeys.isPaused {
                     LabeledContent("Needs Accessibility access") {
                         Button("Open Privacy Settings…") {
                             mediaKeys.refreshPermission()
@@ -172,7 +172,7 @@ struct SettingsView: View {
             } header: {
                 Text("Clean Keyboard")
             } footer: {
-                Caption("Right-click the gear in the panel and choose Clean Keyboard. Nothing on the keyboard or trackpad ends it early. Touch ID locks the Mac, which stops it.")
+                Caption("Right-click the gear in the panel and choose Clean Keyboard. Only Touch ID ends it early, by locking the Mac.")
                     .padding(.leading, 10)
             }
 
@@ -254,10 +254,9 @@ struct SettingsView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
     }
 
-    /// Tall enough for every section at the default text size, including a permission
-    /// row that's showing, but never taller than
-    /// the screen: at the largest text sizes a 13" MacBook Air has only about 640
-    /// points to spare, and the form scrolls there (Quit stays in the footer).
+    /// As tall as fits, up to 900 pt: the form scrolls (it has more sections than fit
+    /// on most screens), and Quit stays in the footer. At the largest text sizes a 13"
+    /// MacBook Air has only about 640 points to spare.
     static var height: CGFloat {
         let available = (ScreenLocator.builtInScreen ?? NSScreen.main)?.visibleFrame.height ?? 900
         return max(360, min(900, available - 60))

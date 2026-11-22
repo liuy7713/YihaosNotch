@@ -79,10 +79,6 @@ struct CompactActivityView: View {
             Image(systemName: count < total ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(count == 0 ? Theme.low : count < total ? Color.yellow : Theme.charge)
-        case .cleaning:
-            Image(systemName: "keyboard")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.primary)
         }
     }
 
@@ -150,13 +146,6 @@ struct CompactActivityView: View {
                 .foregroundStyle(Theme.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-        case .cleaning(let until):
-            TimelineView(.periodic(from: .now, by: 0.25)) { _ in
-                let now = Monotonic.now()
-                Text("\(until > now ? Int((Double(until - now) / 1_000_000_000).rounded(.up)) : 0)")
-                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(Theme.primary)
-            }
         }
     }
 

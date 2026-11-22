@@ -44,6 +44,11 @@ struct NotchDemo: View {
         case menu(chosen: Bool)
         case counting(Int)
         case done
+
+        var isMenu: Bool {
+            if case .menu = self { return true }
+            return false
+        }
     }
 
     /// The open panel's header controls, with their centres measured from the middle
@@ -220,7 +225,7 @@ struct NotchDemo: View {
             if let convertStage {
                 convertContent(convertStage)
                     .transition(.opacity.animation(.easeOut(duration: 0.2)))
-            } else if let cleanStage, cleanStage != .menu(chosen: false), cleanStage != .menu(chosen: true) {
+            } else if let cleanStage, !cleanStage.isMenu {
                 cleanContent(cleanStage)
                     .padding(.horizontal, 22)
                     .padding(.top, 25)
@@ -411,6 +416,8 @@ struct NotchDemo: View {
     private func loop() async {
         if reduceMotion {
             isOpen = true
+            // Someone updating should still see the new tip lit.
+            if startsWithNew { activeTip = 4 }
             return
         }
         if startsWithNew {

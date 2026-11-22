@@ -89,7 +89,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         cleaningSystem.session = cleaner
         cleaningSystem.holdPanel = { [weak controller] hold in controller?.holdOpen(hold) }
-        cleaningSystem.showWings = { [viewModel] until in viewModel?.cleaningUntil = until }
         updates.isBusy = { [cleaner] in cleaner.phase.isRunning }
 
         follow({ [settings] in settings.showLyrics }) { [nowPlaying] in nowPlaying.lyricsEnabled = $0 }
@@ -256,16 +255,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SettingsWindowController.shared.show()
     }
 
-    // Opening the app again (e.g. from Finder or Spotlight) shows Settings, or the
-    // welcome if it hasn't been finished.
-    // An update dragged over the running copy reaches it here too, so that starts the
-    // new version instead.
     /// Quitting mid-clean (a newer copy taking over, say) gives the keyboard back
     /// first. (The session also hears this itself; ending twice does nothing.)
     func applicationWillTerminate(_ notification: Notification) {
         cleaner.interrupt()
     }
 
+    // Opening the app again (e.g. from Finder or Spotlight) shows Settings, or the
+    // welcome if it hasn't been finished.
+    // An update dragged over the running copy reaches it here too, so that starts the
+    // new version instead.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if SingleInstance.relaunchIfUpdated() { return false }
         if settings.needsWelcome {
