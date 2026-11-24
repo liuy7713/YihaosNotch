@@ -83,6 +83,8 @@ struct SettingsView: View {
                 }
                 // The countdown comes from the calendar.
                 .disabled(!settings.calendarEnabled)
+                MeetingShortcutRows(settings: settings, shortcut: .shared)
+                    .disabled(!settings.calendarEnabled)
                 if settings.calendarEnabled, calendar.access == .granted, !calendar.calendars.isEmpty {
                     LabeledContent("Calendars") {
                         Button(calendarsSummary) { choosingCalendars = true }
@@ -381,6 +383,29 @@ private struct CalendarPicker: View {
             !hidden.contains(id)
         } set: { show in
             if show { hidden.remove(id) } else { hidden.insert(id) }
+        }
+    }
+}
+
+/// The opt-in join-meeting shortcut, and its combination once it's on.
+private struct MeetingShortcutRows: View {
+    @Bindable var settings: AppSettings
+    @Bindable var shortcut: MeetingShortcut
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle("Shortcut to join the next meeting", isOn: $settings.joinMeetingShortcutEnabled)
+            Caption("Joins the meeting that's on now or starts within 10 minutes, from any app.")
+        }
+        if settings.joinMeetingShortcutEnabled {
+            LabeledContent("Shortcut") {
+                ShortcutRecorder(combo: $settings.joinMeetingShortcut, isRecording: $shortcut.isRecording)
+            }
+            if shortcut.isRecording {
+                Caption("Use ⌃ or ⌘ with one more modifier, and a key. Esc keeps \(settings.joinMeetingShortcut.display).")
+            } else if shortcut.isUnavailable {
+                Caption("macOS or another app is using \(settings.joinMeetingShortcut.display). Click it to choose another.")
+            }
         }
     }
 }

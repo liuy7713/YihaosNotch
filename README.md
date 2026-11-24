@@ -66,7 +66,10 @@ fingers), it shows:
   the chosen day, with all-day events on one line at the top. Clicking an event shows
   it in Calendar; Zoom, Teams, Meet and Webex links get a Join button (until the event
   ends) that opens the meeting straight in its app. Settings chooses which calendars
-  are shown.
+  are shown, and can turn on a shortcut (⌃⌥J, or one you choose) that joins the
+  meeting that's on now or starts within 10 minutes, from any app; with nothing to
+  join, the notch says so for a moment. The shortcut needs no permission: macOS tells
+  the app only when that combination is pressed.
 - **Timer**: click the clock in the header, or click the timer's wings while it runs.
   Seven presets and a custom tile (marked ↕): scroll on it to pick from 1 to 180
   minutes, one stop per scroll tick (single minutes to 10, fives to an hour, then

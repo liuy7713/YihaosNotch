@@ -93,6 +93,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         follow({ [settings] in settings.showLyrics }) { [nowPlaying] in nowPlaying.lyricsEnabled = $0 }
         follow({ [settings] in settings.hiddenCalendars }) { [calendar] in calendar.hiddenCalendars = $0 }
+        MeetingShortcut.shared.onPress = { [weak self] in self?.joinNextMeeting() }
+        follow({ [settings] in
+            (settings.calendarEnabled, settings.joinMeetingShortcutEnabled, settings.joinMeetingShortcut)
+        }) { _ in MeetingShortcut.shared.update() }
 
         // Until the welcome screen is done, nothing that would raise a permission prompt
         // runs: it asks for each one itself, with a reason. (Reading the players sends
@@ -116,6 +120,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Silent at launch: the permission prompt only ever comes from a toggle.
             if settings.replaceSystemHUD { mediaKeys.enable(prompt: false) }
         }
+        // No global shortcut before the welcome is done, like everything else.
+        MeetingShortcut.shared.isAllowed = !settings.needsWelcome
         if CommandLine.arguments.contains("--preview-welcome") {
             WelcomeWindowController.shared.show()
         } else if settings.needsWelcome {
@@ -159,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard settings.needsWelcome else { return }
         let firstRun = settings.isFirstRun
         settings.completeWelcome()
+        MeetingShortcut.shared.isAllowed = true
         if firstRun, !DemoContent.isOn {
             nowPlaying.start()
             followUpdateSetting()
@@ -166,6 +173,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(0.6))
             self?.controller?.greet()
+        }
+    }
+
+    /// The join-meeting shortcut: the same as clicking the meeting's Join button, or a
+    /// brief grey "No meeting" in the notch when there's nothing to join.
+    private func joinNextMeeting() {
+        // Clean Keyboard's tap swallows every key before macOS matches hot keys, so this
+        // can't happen mid-clean; the check makes sure of it.
+        guard !cleaner.phase.isRunning else { return }
+        guard let meeting = calendar.meetingToJoin()?.meeting else {
+            viewModel.flash(.joining(provider: nil), seconds: 1.8)
+            return
+        }
+        viewModel.flash(.joining(provider: meeting.provider.name), seconds: 2.5)
+        if DemoContent.isOn {
+            // The demo's links are made up; opening one would only show an error.
+            Logger(subsystem: "com.yihao.YihaosNotch", category: "Calendar")
+                .info("demo: would join \(meeting.url.absoluteString, privacy: .public)")
+        } else {
+            meeting.open()
         }
     }
 
