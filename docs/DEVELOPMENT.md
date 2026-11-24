@@ -97,6 +97,8 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--preview-welcome N` | Shows the welcome screen at page N (0–2), even if it has been finished. |
 | `--preview-hud` | Cycles the volume, brightness, headphone and charging indicators (charging shows the real power state). The real volume and brightness are untouched. |
 | `--preview-convert PATH` | Shows PATH as if dropped on the notch (add `--preview-open` to keep the panel open on it). |
+| `--preview-convert-to FORMAT` | With `--preview-convert`, converts the file a second later as if FORMAT's button were clicked. FORMAT is a `ConvertTarget` case: `pdf`, `png`, `jpeg`, `word`, `text`, `powerPoint`, `excel`, `csv`… The result is saved where Settings says (Downloads by default). |
+| `--without-office` | Converts as if Microsoft Office weren't installed, so slides, spreadsheets and Word files go to Keynote, Numbers and Pages. |
 | `--demo` | Shows made-up content for screenshots: a track with lyrics and artwork drawn in code, and a week of invented events with a meeting on the next quarter hour. Music, Calendar, headphones, the media keys and update checks aren't started, so nothing real appears. Add `--preview-open`, `--preview-timer` or `--preview-convert PATH` for the other scenes. |
 | `--demo-meeting` | As `--demo`, with the track paused, so the closed notch counts down to the meeting (add `-eventReminderMinutes 15` if the reminder is set shorter). With the join shortcut on, pressing it within 10 minutes of the meeting shows Zoom in the notch but opens nothing (the demo's links are made up). |
 | `--clean-seconds N` | Clean Keyboard runs for N seconds (5 to 60) instead of the Settings length, for quick tests. |
@@ -157,7 +159,7 @@ when updating one, pin the new release's commit and keep the version in the comm
 | `Features/Camera` | Mirror; the camera runs only while it's visible |
 | `Features/System` | Volume/brightness keys (event tap, opt-in), headphone connection, global shortcuts (Carbon hot keys, no permission) |
 | `Features/Timer` | Countdown timer, opened from the header clock |
-| `Features/Convert` | Files dropped on the notch: which formats each kind can become (`ConvertCatalog`), the conversions (ImageIO, PDFKit, AVFoundation, the text system, Microsoft Word over AppleScript), Markdown to HTML with Foundation's parser, and saving without replacing anything |
+| `Features/Convert` | Files dropped on the notch: which formats each kind can become (`ConvertCatalog`), the conversions (ImageIO, PDFKit, AVFoundation, the text system, and over AppleScript Microsoft Office or, without it, Keynote, Numbers and Pages: `ConvertApp` picks and prepares them, `Office` and `IWork` drive them), Markdown to HTML with Foundation's parser, and saving without replacing anything |
 | `Features/CleanKeyboard` | Turning input off for wiping: one HID event tap on its own thread, its rules and watchdog, the session's steps, the overlay, and putting Caps Lock back |
 | `Features/Update` | Daily check of GitHub's latest release; installs it by swapping the bundle after checking the image's SHA-256 and that it's signed by the same certificate |
 | `Settings/` | Settings window |

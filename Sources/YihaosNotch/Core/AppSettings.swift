@@ -88,7 +88,9 @@ final class AppSettings {
     var convertStripLocation: Bool {
         didSet { defaults.set(convertStripLocation, forKey: Key.convertStripLocation) }
     }
-    /// Documents go through Microsoft Word when it's installed.
+    /// Documents go through Microsoft Word when it's installed, or Word files through
+    /// Pages without it. Keynote and Numbers need no setting: slides and spreadsheets
+    /// can't be converted without an app.
     var convertUseWord: Bool {
         didSet { defaults.set(convertUseWord, forKey: Key.convertWord) }
     }

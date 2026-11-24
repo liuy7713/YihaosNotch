@@ -5,8 +5,9 @@ private let log = Logger(subsystem: "com.yihao.YihaosNotch", category: "Convert"
 
 /// Word, RTF, OpenDocument, HTML, plain text and Markdown to PDF, Word, text or HTML.
 /// Microsoft Word does it when it's installed and the setting allows (it lays the
-/// document out exactly as Word would print it); otherwise macOS's text system does,
-/// which keeps text, fonts and tables but not Word's exact layout.
+/// document out exactly as Word would print it), or Pages for Word files without Word
+/// (it keeps pictures, page breaks and most of the layout); otherwise macOS's text
+/// system does, which keeps text, fonts and tables but not the layout.
 enum Documents {
     /// Converts `input` to `out`. Returns a note when Word was wanted but couldn't help.
     static func convert(_ input: URL, to target: ConvertTarget, useWord: Bool, out: URL) async throws -> String? {
@@ -29,7 +30,8 @@ enum Documents {
         }
 
         var note: String?
-        if useWord, target == .pdf || target == .word, WordAutomation.isInstalled {
+        switch ConvertCatalog.app(for: input, to: target, useWord: useWord) {
+        case .word:
             if let markdown {
                 // Word reads HTML well; images beside the Markdown file are copied
                 // along so Word can reach them.
@@ -42,6 +44,20 @@ enum Documents {
             // Stop pressed while Word was busy: nothing is saved.
             try Task.checkCancellation()
             note = "Made without Word, which didn't respond."
+        case .pages:
+            do {
+                try await IWorkAutomation.convert(input, with: .pages, to: target == .pdf ? .pdf : .word, out: out)
+                return nil
+            } catch let error as ConvertError {
+                try Task.checkCancellation()
+                note = if case .notAllowed = error {
+                    "Made without Pages, which this app isn't allowed to control."
+                } else {
+                    "Made without Pages, which couldn't open it."
+                }
+            }
+        default:
+            break
         }
 
         // The text system lays out on the main thread; a huge log or CSV would freeze
@@ -188,10 +204,6 @@ enum TextSystem {
 enum WordAutomation {
     static let bundleID = "com.microsoft.Word"
 
-    static var isInstalled: Bool {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
-    }
-
     static var folder: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.yihao.YihaosNotch/Word", isDirectory: true)
@@ -206,7 +218,7 @@ enum WordAutomation {
         let id = UUID().uuidString
         let source = work.appendingPathComponent("\(id).\(input.pathExtension)")
         do {
-            try Office.prepare(work)
+            try ConvertApp.prepare(work)
             if input.pathExtension.lowercased().hasPrefix("htm") {
                 // Word would load the page's web images and stylesheets: give it a copy
                 // without them, so converting never goes online.
@@ -235,7 +247,7 @@ enum WordAutomation {
             for url in copied { try? FileManager.default.removeItem(at: url) }
         }
         do {
-            try Office.prepare(work)
+            try ConvertApp.prepare(work)
             // No web images: Word would fetch them.
             var html = MarkdownHTML.document(markdown, title: title, base: base, remoteImages: false)
             // Local images, by their full file URLs, become copies next to the page. Only

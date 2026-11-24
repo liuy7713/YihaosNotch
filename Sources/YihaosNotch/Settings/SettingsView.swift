@@ -125,10 +125,18 @@ struct SettingsView: View {
                 .disabled(!settings.convertDropEnabled)
                 Toggle("Remove location from photos", isOn: $settings.convertStripLocation)
                     .disabled(!settings.convertDropEnabled)
-                if WordAutomation.isInstalled {
+                // One switch for the app that lays documents out: Word, or Pages for Word
+                // files without it.
+                if ConvertApp.isInstalled(.word) {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle("Use Microsoft Word for documents", isOn: $settings.convertUseWord)
                         Caption("Word lays PDFs out exactly as it prints them. macOS and Word each ask once, the first time.")
+                    }
+                    .disabled(!settings.convertDropEnabled)
+                } else if ConvertApp.isInstalled(.pages) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("Use Pages for Word documents", isOn: $settings.convertUseWord)
+                        Caption("Pages keeps their pictures and layout in PDFs. macOS asks once, the first time.")
                     }
                     .disabled(!settings.convertDropEnabled)
                 }

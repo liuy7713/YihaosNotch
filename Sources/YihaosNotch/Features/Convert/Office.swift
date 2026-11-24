@@ -3,130 +3,10 @@ import os
 
 private let log = Logger(subsystem: "com.yihao.YihaosNotch", category: "Convert")
 
-/// Microsoft Office apps, which convert what macOS can't: slides and spreadsheets (and
-/// Word documents, see `WordAutomation`). They're sandboxed, so each works in its own
-/// folder of ours under ~/Library/Caches/com.yihao.YihaosNotch: the first time, the app
-/// asks once for access to it, and macOS asks once whether this app may control it.
-enum Office {
-    enum App: String, CaseIterable, Sendable {
-        case word, powerPoint, excel
-
-        var bundleID: String {
-            switch self {
-            case .word: "com.microsoft.Word"
-            case .powerPoint: "com.microsoft.Powerpoint"
-            case .excel: "com.microsoft.Excel"
-            }
-        }
-
-        var name: String {
-            switch self {
-            case .word: "Word"
-            case .powerPoint: "PowerPoint"
-            case .excel: "Excel"
-            }
-        }
-
-        /// Where the app reads our copy of a file and writes what it makes.
-        var folder: URL {
-            FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("com.yihao.YihaosNotch/\(name)", isDirectory: true)
-        }
-
-        var isRunning: Bool {
-            !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
-        }
-
-        /// Set after the app first converts something: from then on it isn't brought
-        /// to the front (the first time it may need to show its access dialog).
-        var hasWorked: Bool {
-            get { UserDefaults.standard.bool(forKey: "\(rawValue)ConversionWorked") }
-            nonmutating set { UserDefaults.standard.set(newValue, forKey: "\(rawValue)ConversionWorked") }
-        }
-    }
-
-    /// Which apps tests pretend are installed.
-    @TaskLocal static var installedForTesting: Set<App>?
-
-    /// Looked up at most every few seconds: the formats offered are worked out on
-    /// every redraw, and someone may install Office while the app is running.
-    private static let cache = OSAllocatedUnfairLock<(date: Date, apps: Set<App>)?>(initialState: nil)
-
-    static func isInstalled(_ app: App) -> Bool {
-        if let installedForTesting { return installedForTesting.contains(app) }
-        let apps = cache.withLock { cached -> Set<App> in
-            if let cached, cached.date.timeIntervalSinceNow > -5 { return cached.apps }
-            let apps = Set(App.allCases.filter {
-                NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleID) != nil
-            })
-            cached = (Date.now, apps)
-            return apps
-        }
-        return apps.contains(app)
-    }
-
-    /// Makes the folder, and clears out anything an earlier conversion left behind
-    /// (the app finishing after a Stop or a timeout, or this app quitting mid-way).
-    static func prepare(_ work: URL) throws {
-        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
-        let old = Date.now.addingTimeInterval(-600)
-        let items = (try? FileManager.default.contentsOfDirectory(at: work, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-        for item in items {
-            let modified = (try? item.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            if modified < old { try? FileManager.default.removeItem(at: item) }
-        }
-    }
-
-    /// Copies `input` into the app's folder under a name of its own, so the original is
-    /// never opened (or locked, or changed) by the app. CSV gets a byte-order mark if
-    /// it's UTF-8 without one, or Excel reads accented and Asian text as gibberish.
-    static func stage(_ input: URL, for app: App, id: String) throws -> URL {
-        let work = app.folder
-        try prepare(work)
-        let copy = work.appendingPathComponent("\(id).\(input.pathExtension.lowercased())")
-        if input.pathExtension.lowercased() == "csv" {
-            let data = try Data(contentsOf: input)
-            let bom = Data([0xEF, 0xBB, 0xBF])
-            if !data.starts(with: bom), String(data: data, encoding: .utf8) != nil {
-                try (bom + data).write(to: copy)
-                return copy
-            }
-        }
-        try FileManager.default.copyItem(at: input, to: copy)
-        // The copy keeps the original's date; the sweep in `prepare` goes by it.
-        try? FileManager.default.setAttributes([.modificationDate: Date.now], ofItemAtPath: copy.path)
-        return copy
-    }
-
-    /// After a failure or Stop: closes whatever this conversion opened, quits the app
-    /// if this conversion launched it and nothing else is open, then deletes `files`.
-    /// Runs on its own: the conversion's task is cancelled and can't run scripts, and
-    /// the app may still be busy with the request that was cut off.
-    static func tidy(_ app: App, handler: String, id: String, quitting: Bool, removing files: [URL]) {
-        Task.detached {
-            _ = await Osascript.run(handler + """
-
-                on run argv
-                    my tidy(item 1 of argv, item 2 of argv)
-                end run
-                """, arguments: [id, quitting ? "quit" : "stay"], deadline: 130)
-            for file in files { try? FileManager.default.removeItem(at: file) }
-        }
-    }
-
-    /// After a conversion quit the app it launched: waits a few seconds for it to go,
-    /// so the next file in a batch doesn't find it still running (and leave it open).
-    static func waitUntilQuit(_ app: App) async {
-        for _ in 0..<25 where app.isRunning {
-            try? await Task.sleep(for: .milliseconds(200))
-        }
-    }
-}
-
 /// Slides to PDF or PowerPoint (.pptx) with Microsoft PowerPoint. Pictures of the
 /// slides are drawn from the PDF.
 enum PowerPointAutomation {
-    private static let bundleID = Office.App.powerPoint.bundleID
+    private static let bundleID = ConvertApp.powerPoint.bundleID
 
     /// Closes every presentation with the id in its name (it keeps it after a save as
     /// .pptx: "<id>-out.pptx"), then quits if asked and nothing else is open.
@@ -204,11 +84,11 @@ enum PowerPointAutomation {
 
     static func convert(_ input: URL, to target: ConvertTarget, out: URL) async throws {
         let name = input.lastPathComponent
-        let app = Office.App.powerPoint
+        let app = ConvertApp.powerPoint
         let id = UUID().uuidString
         let source: URL
         do {
-            source = try Office.stage(input, for: app, id: id)
+            source = try ConvertApp.stage(input, for: app, id: id)
         } catch {
             throw ConvertError.unreadable(name)
         }
@@ -226,7 +106,7 @@ enum PowerPointAutomation {
         // PowerPoint's AppleScript `open` hangs, so the copy is opened the way a
         // double-click in Finder opens it, which also gives PowerPoint access to it.
         guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID) else {
-            throw ConvertError.officeFailed(name, app: app.name)
+            throw ConvertError.appFailed(name, app: app.fullName)
         }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = !app.hasWorked
@@ -235,7 +115,7 @@ enum PowerPointAutomation {
             _ = try await NSWorkspace.shared.open([source], withApplicationAt: appURL, configuration: configuration)
         } catch {
             log.error("PowerPoint didn't open the file")
-            throw ConvertError.officeFailed(name, app: app.name)
+            throw ConvertError.appFailed(name, app: app.fullName)
         }
         let output = await Osascript.run(script, arguments: [
             result.path, target == .powerPoint ? "pptx" : "pdf", app.hasWorked ? "back" : "front", id,
@@ -244,10 +124,10 @@ enum PowerPointAutomation {
         guard !Task.isCancelled, output == "ok", FileManager.default.fileExists(atPath: result.path) else {
             // Stopped or failed part-way: PowerPoint may still have it open.
             tidied = true
-            Office.tidy(app, handler: tidyHandler, id: id, quitting: !wasRunning, removing: [source, result])
+            ConvertApp.tidy(handler: tidyHandler, arguments: [id, wasRunning ? "stay" : "quit"], removing: [source, result])
             try Task.checkCancellation()
             log.error("PowerPoint conversion failed")
-            throw ConvertError.officeFailed(name, app: app.name)
+            throw ConvertError.appFailed(name, app: app.fullName)
         }
         do {
             try FileManager.default.moveItem(at: result, to: out)
@@ -255,14 +135,14 @@ enum PowerPointAutomation {
             throw ConvertError.failed(name)
         }
         app.hasWorked = true
-        if !wasRunning { await Office.waitUntilQuit(app) }
+        if !wasRunning { await ConvertApp.waitUntilQuit(app) }
     }
 }
 
 /// Spreadsheets to PDF or Excel (.xlsx) with Microsoft Excel. CSV is read from the
 /// .xlsx by `XLSX`, so it comes out as UTF-8 (Excel's own CSV isn't).
 enum ExcelAutomation {
-    private static let bundleID = Office.App.excel.bundleID
+    private static let bundleID = ConvertApp.excel.bundleID
 
     /// Closes every workbook with the id in its path (its own copy, or the .xlsx it
     /// was saved as in the job folder), then quits if asked and nothing else is open
@@ -334,14 +214,14 @@ enum ExcelAutomation {
 
     static func convert(_ input: URL, to target: ConvertTarget, out: URL) async throws {
         let name = input.lastPathComponent
-        let app = Office.App.excel
+        let app = ConvertApp.excel
         let id = UUID().uuidString
         // Excel may write a PDF per sheet next to the one asked for: it gets a folder
         // of its own, and every PDF in it is joined in the order they were made.
         let job = app.folder.appendingPathComponent(id, isDirectory: true)
         let source: URL
         do {
-            source = try Office.stage(input, for: app, id: id)
+            source = try ConvertApp.stage(input, for: app, id: id)
         } catch {
             throw ConvertError.unreadable(name)
         }
@@ -370,10 +250,10 @@ enum ExcelAutomation {
         guard !Task.isCancelled, output == "ok", !made.isEmpty else {
             // Stopped or failed part-way: Excel may still have it open, or be writing.
             tidied = true
-            Office.tidy(app, handler: tidyHandler, id: id, quitting: !wasRunning, removing: [source, job])
+            ConvertApp.tidy(handler: tidyHandler, arguments: [id, wasRunning ? "stay" : "quit"], removing: [source, job])
             try Task.checkCancellation()
             log.error("Excel conversion failed")
-            throw ConvertError.officeFailed(name, app: app.name)
+            throw ConvertError.appFailed(name, app: app.fullName)
         }
         if made.count > 1 {
             try await Converters.renamingErrors(name) {
@@ -387,7 +267,7 @@ enum ExcelAutomation {
             }
         }
         app.hasWorked = true
-        if !wasRunning { await Office.waitUntilQuit(app) }
+        if !wasRunning { await ConvertApp.waitUntilQuit(app) }
     }
 
     /// The PDFs Excel wrote, oldest first (not its "~$" lock files).

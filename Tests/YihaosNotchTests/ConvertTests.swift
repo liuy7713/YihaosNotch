@@ -65,8 +65,8 @@ struct ConvertCatalogTests {
             == .init(title: "ZIP files aren't supported yet", detail: "Unzip it and drop the files inside."))
         #expect(ConvertCatalog.refusal(for: urls("a.zip", "b.dmg"))?.title == "These files aren't supported yet")
         #expect(ConvertCatalog.refusal(for: urls("a.dmg", "b.dmg"))?.title == "DMG files aren't supported yet")
-        #expect(ConvertCatalog.refusal(for: urls("Talk.key"))?.detail
-            == "Export it from Keynote as PowerPoint or PDF, then drop that.")
+        #expect(ConvertCatalog.refusal(for: urls("Show.ppsx"))?.detail
+            == "It's a slide show. Open it in PowerPoint or Keynote and save a presentation (.pptx) first.")
         #expect(ConvertCatalog.refusal(for: urls("LICENSE"))?.title == "This file isn't supported yet")
         #expect(ConvertCatalog.refusal(for: urls("Safari.app"))?.title == "Apps can't be converted")
         #expect(ConvertCatalog.refusal(for: urls("LICENSE"))?.detail.hasPrefix("The notch converts photos") == true)
@@ -96,14 +96,13 @@ struct ConvertCatalogTests {
     }
 
     @Test func slidesAndSpreadsheetsNeedOffice() {
-        Office.$installedForTesting.withValue([.powerPoint, .excel]) {
+        ConvertApp.$installedForTesting.withValue([.powerPoint, .excel]) {
             #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/Deck.PPTX")) == .presentation)
             #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/old.ppt")) == .presentation)
             #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/Budget.xlsx")) == .spreadsheet)
             #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/old.xls")) == .spreadsheet)
             #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/data.csv")) == .spreadsheet)
             #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/show.ppsx")) == nil)
-            #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/Budget.numbers")) == nil)
             #expect(ConvertCatalog.targets(for: urls("Deck.pptx")) == [.pdf, .png, .jpeg])
             #expect(ConvertCatalog.targets(for: urls("old.ppt")) == [.pdf, .png, .jpeg, .powerPoint])
             #expect(ConvertCatalog.targets(for: urls("Budget.xlsx")) == [.pdf, .csv])
@@ -115,27 +114,142 @@ struct ConvertCatalogTests {
             #expect(ConvertCatalog.targets(for: urls("Deck.pptx", "Budget.xlsx")) == [.pdf])
             #expect(ConvertCatalog.refusal(for: urls("Deck.pptx", "clip.mov"))?.detail
                 == "Presentations and videos need different formats. Drop them separately.")
+            // Keynote and Numbers files need their own apps.
+            #expect(ConvertCatalog.targets(for: urls("Talk.key")).isEmpty)
+            #expect(ConvertCatalog.refusal(for: urls("Talk.key"))
+                == .init(title: "Can't convert Talk.key", detail: "Converting Keynote files needs Keynote."))
+            #expect(ConvertCatalog.refusal(for: urls("Budget.numbers"))?.detail == "Converting Numbers files needs Numbers.")
         }
-        Office.$installedForTesting.withValue([]) {
-            // An .xlsx still becomes CSV; the rest needs the app. CSV is text then.
+        ConvertApp.$installedForTesting.withValue([]) {
+            // An .xlsx still becomes CSV; the rest needs an app. CSV is text then.
             #expect(ConvertCatalog.targets(for: urls("Budget.xlsx")) == [.csv])
             #expect(ConvertCatalog.targets(for: urls("old.xls")).isEmpty)
             #expect(ConvertCatalog.targets(for: urls("Deck.pptx")).isEmpty)
             #expect(ConvertCatalog.kind(of: URL(fileURLWithPath: "/a/data.csv")) == .document)
             #expect(ConvertCatalog.refusal(for: urls("Deck.pptx"))
-                == .init(title: "Can't convert Deck.pptx", detail: "Converting slides needs Microsoft PowerPoint."))
+                == .init(title: "Can't convert Deck.pptx", detail: "Converting slides needs Microsoft PowerPoint or Keynote."))
             #expect(ConvertCatalog.refusal(for: urls("old.xls"))
-                == .init(title: "Can't convert old.xls", detail: "Converting XLS files needs Microsoft Excel."))
+                == .init(title: "Can't convert old.xls", detail: "Converting XLS files needs Microsoft Excel or Numbers."))
             #expect(ConvertCatalog.refusal(for: urls("a.ppt", "b.ppt"))?.title == "Can't convert these files")
             #expect(ConvertCatalog.refusal(for: urls("Deck.pptx", "a.zip"))
-                == .init(title: "Can't convert Deck.pptx", detail: "Converting slides needs Microsoft PowerPoint."))
+                == .init(title: "Can't convert Deck.pptx", detail: "Converting slides needs Microsoft PowerPoint or Keynote."))
+            // Only Excel opens .ods: that's what both need.
             #expect(ConvertCatalog.refusal(for: urls("a.ods", "b.xls"))?.detail
                 == "Converting these spreadsheets needs Microsoft Excel.")
+            #expect(ConvertCatalog.refusal(for: urls("a.odp"))?.detail == "Converting ODP files needs Microsoft PowerPoint.")
             #expect(ConvertCatalog.refusal(for: urls("a.pptx", "b.xls"))?.detail
-                == "Converting them needs Microsoft PowerPoint and Excel.")
+                == "Converting them needs Microsoft PowerPoint or Keynote, and Microsoft Excel or Numbers.")
             #expect(ConvertCatalog.refusal(for: urls("a.jpg", "b.ppt"))?.title == "Can't convert b.ppt")
             #expect(ConvertCatalog.refusal(for: urls("Budget.xlsx")) == nil)
+            #expect(ConvertCatalog.refusal(for: urls("Letter.pages"))?.detail == "Converting Pages files needs Pages.")
+            #expect(ConvertCatalog.refusal(for: urls("a.key", "b.key"))?.detail == "Converting Keynote files needs Keynote.")
+            // Word files fall back to macOS's text system.
+            #expect(ConvertCatalog.targets(for: urls("Letter.docx")) == [.pdf, .text])
         }
+    }
+
+    @Test func keynoteNumbersAndPagesStandInForOffice() {
+        ConvertApp.$installedForTesting.withValue([.keynote, .numbers, .pages]) {
+            let file = { (name: String) in URL(fileURLWithPath: "/tmp/\(name)") }
+            #expect(ConvertCatalog.kind(of: file("Talk.key")) == .presentation)
+            #expect(ConvertCatalog.kind(of: file("Budget.numbers")) == .spreadsheet)
+            #expect(ConvertCatalog.kind(of: file("Letter.pages")) == .document)
+            #expect(ConvertCatalog.kind(of: file("data.csv")) == .spreadsheet)
+            #expect(ConvertCatalog.targets(for: urls("Talk.key")) == [.pdf, .png, .jpeg, .powerPoint])
+            #expect(ConvertCatalog.targets(for: urls("Deck.pptx")) == [.pdf, .png, .jpeg])
+            #expect(ConvertCatalog.targets(for: urls("Budget.numbers")) == [.pdf, .excel, .csv])
+            #expect(ConvertCatalog.targets(for: urls("Budget.xlsx")) == [.pdf, .csv])
+            #expect(ConvertCatalog.targets(for: urls("Letter.pages")) == [.pdf, .word, .text])
+            #expect(ConvertCatalog.targets(for: urls("Talk.key", "Deck.pptx")) == [.pdf, .png, .jpeg, .powerPoint])
+            #expect(ConvertCatalog.describe(urls("Talk.key", "Deck.ppt")) == "2 presentations")
+            // Keynote can't open OpenDocument slides, nor Numbers OpenDocument sheets.
+            #expect(ConvertCatalog.targets(for: urls("a.odp")).isEmpty)
+            #expect(ConvertCatalog.targets(for: urls("a.ods")).isEmpty)
+            #expect(ConvertCatalog.refusal(for: urls("a.ods"))?.detail == "Converting ODS files needs Microsoft Excel.")
+
+            #expect(ConvertCatalog.app(for: file("Deck.pptx"), to: .pdf, useWord: true) == .keynote)
+            #expect(ConvertCatalog.app(for: file("Talk.key"), to: .powerPoint, useWord: false) == .keynote)
+            #expect(ConvertCatalog.app(for: file("old.xls"), to: .csv, useWord: true) == .numbers)
+            #expect(ConvertCatalog.app(for: file("Budget.xlsx"), to: .csv, useWord: true) == nil)
+            #expect(ConvertCatalog.app(for: file("Budget.numbers"), to: .csv, useWord: true) == .numbers)
+            // Pages for Word files when the setting allows; the text system otherwise.
+            #expect(ConvertCatalog.app(for: file("Letter.docx"), to: .pdf, useWord: true) == .pages)
+            #expect(ConvertCatalog.app(for: file("Letter.doc"), to: .word, useWord: true) == .pages)
+            #expect(ConvertCatalog.app(for: file("Letter.docx"), to: .pdf, useWord: false) == nil)
+            #expect(ConvertCatalog.app(for: file("Letter.docx"), to: .text, useWord: true) == nil)
+            #expect(ConvertCatalog.app(for: file("notes.rtf"), to: .pdf, useWord: true) == nil)
+            #expect(ConvertCatalog.app(for: file("README.md"), to: .pdf, useWord: true) == nil)
+            // Its own files always go through Pages, setting or not.
+            #expect(ConvertCatalog.app(for: file("Letter.pages"), to: .text, useWord: false) == .pages)
+        }
+        // Office first, when both are there.
+        ConvertApp.$installedForTesting.withValue(Set(ConvertApp.allCases)) {
+            let file = { (name: String) in URL(fileURLWithPath: "/tmp/\(name)") }
+            #expect(ConvertCatalog.app(for: file("Deck.pptx"), to: .pdf, useWord: true) == .powerPoint)
+            #expect(ConvertCatalog.app(for: file("old.xls"), to: .pdf, useWord: true) == .excel)
+            #expect(ConvertCatalog.app(for: file("Letter.docx"), to: .pdf, useWord: true) == .word)
+            #expect(ConvertCatalog.app(for: file("Talk.key"), to: .pdf, useWord: true) == .keynote)
+            #expect(ConvertCatalog.app(for: file("Budget.numbers"), to: .excel, useWord: true) == .numbers)
+            #expect(ConvertCatalog.targets(for: urls("a.odp")) == [.pdf, .png, .jpeg, .powerPoint])
+        }
+    }
+
+    @Test func aPrivateKeyIsntAPresentation() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let key = folder.appendingPathComponent("server.key")
+        try "-----BEGIN PRIVATE KEY-----\n".write(to: key, atomically: true, encoding: .utf8)
+        let deck = folder.appendingPathComponent("Talk.key")
+        try Data("PK\u{3}\u{4}".utf8).write(to: deck)
+        let package = folder.appendingPathComponent("Old.key")
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        #expect(ConvertCatalog.kind(of: key) == nil)
+        #expect(ConvertCatalog.kind(of: deck) == .presentation)
+        #expect(ConvertCatalog.kind(of: package) == .presentation)
+    }
+
+    @Test func spotsPasswordProtectedFiles() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        // An encrypted .docx is a compound file, not a zip.
+        let locked = folder.appendingPathComponent("Locked.docx")
+        try Data([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0, 0]).write(to: locked)
+        #expect(ConvertApp.isPasswordProtected(locked))
+        let open = folder.appendingPathComponent("Open.pptx")
+        try Data("PK\u{3}\u{4}rest".utf8).write(to: open)
+        #expect(!ConvertApp.isPasswordProtected(open))
+        // A Keynote package with a password verifier inside.
+        let package = folder.appendingPathComponent("Locked.key")
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        #expect(!ConvertApp.isPasswordProtected(package))
+        try Data().write(to: package.appendingPathComponent(".iwpv2"))
+        #expect(ConvertApp.isPasswordProtected(package))
+        // Single-file documents are zips: the verifier is an entry.
+        let zipped = folder.appendingPathComponent("Locked.numbers")
+        let plain = folder.appendingPathComponent("Plain.pages")
+        try zip([".iwpv2": "x", "Index/Document.iwa": "y"], to: zipped)
+        try zip(["Index/Document.iwa": "y"], to: plain)
+        #expect(ConvertApp.isPasswordProtected(zipped))
+        #expect(!ConvertApp.isPasswordProtected(plain))
+        #expect(!ConvertApp.isPasswordProtected(folder.appendingPathComponent("Missing.key")))
+    }
+
+    /// A zip of these files, made with the system's `zip`.
+    private func zip(_ files: [String: String], to url: URL) throws {
+        let source = url.deletingPathExtension().appendingPathExtension("parts")
+        for (name, text) in files {
+            let file = source.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: file, atomically: true, encoding: .utf8)
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        process.currentDirectoryURL = source
+        process.arguments = ["-qr", url.path, "."]
+        try process.run()
+        process.waitUntilExit()
     }
 
     @Test func namesBatchFoldersByTheNewFormat() {
@@ -539,5 +653,110 @@ struct XLSXTests {
         #expect(XLSX.cell("A0")?.row == nil)
         #expect(XLSX.csv([["a", "b c", " x"], ["1"]]) == "a,b c,\" x\"\r\n1,,\r\n")
         #expect(XLSX.fileName(".hidden/one:two") == "_hidden-one-two")
+    }
+}
+
+/// The AppleScript sent to Keynote, Numbers and Pages, as text: nothing is run.
+struct IWorkScriptTests {
+    /// One-word terms of the three apps' dictionaries (from `sdef`) that read like
+    /// variable names. A variable with one of these names silently means the app's
+    /// property instead.
+    private let terms: Set<String> = [
+        "address", "alignment", "author", "automatic", "borders", "bottom", "cell", "center", "character",
+        "chart", "color", "column", "cover", "data", "date", "description", "direction", "duration", "export",
+        "file", "files", "filtered", "font", "format", "formula", "frozen", "genre", "group", "height", "hint",
+        "id", "image", "language", "left", "line", "locked", "name", "number", "page", "paragraph", "parent",
+        "password", "position", "presentation", "range", "rating", "right", "row", "scale", "section",
+        "selection", "shape", "sheet", "size", "skipped", "slide", "spreadsheet", "start", "table", "tag",
+        "template", "text", "theme", "title", "top", "type", "value", "width", "word", "saved", "document",
+        "documents", "window", "result", "version", "modified",
+    ]
+
+    private func variables(in script: String) -> Set<String> {
+        let pattern = try! NSRegularExpression(pattern: #"\bset (\w+) to\b|\brepeat with (\w+) in\b|\bon \w+\(([^)]*)\)"#)
+        var names: Set<String> = []
+        for match in pattern.matches(in: script, range: NSRange(script.startIndex..., in: script)) {
+            for group in 1...3 {
+                guard let range = Range(match.range(at: group), in: script) else { continue }
+                for name in script[range].split(separator: ",") {
+                    names.insert(name.trimmingCharacters(in: .whitespaces))
+                }
+            }
+        }
+        return names
+    }
+
+    @Test(arguments: [ConvertApp.keynote, .numbers, .pages])
+    func variablesAreNotDictionaryTerms(app: ConvertApp) {
+        let scripts = [IWorkAutomation.script(for: app, bundleID: app.bundleIDs[0]),
+                       IWorkAutomation.readyScript(bundleID: app.bundleIDs[0])]
+        for script in scripts {
+            let names = variables(in: script)
+            #expect(!names.isEmpty)
+            #expect(names.isDisjoint(with: terms), "\(names.intersection(terms))")
+        }
+    }
+
+    @Test func eachAppExportsItsOwnFormats() {
+        let keynote = IWorkAutomation.script(for: .keynote, bundleID: "com.apple.Keynote")
+        #expect(keynote.contains(#"tell application id "com.apple.Keynote""#))
+        #expect(keynote.contains(#"if exportKind is "pdf" then"#))
+        #expect(keynote.contains("export theDoc to outFile as PDF with properties {PDF image quality:Best}"))
+        #expect(keynote.contains(#"else if exportKind is "powerPoint" then"#))
+        #expect(keynote.contains("export theDoc to outFile as Microsoft PowerPoint"))
+        #expect(!keynote.contains("Microsoft Excel"))
+
+        let numbers = IWorkAutomation.script(for: .numbers, bundleID: "com.apple.iWork.Numbers")
+        #expect(numbers.contains(#"tell application id "com.apple.iWork.Numbers""#))
+        #expect(numbers.contains("as Microsoft Excel with properties {exclude summary worksheet:true}"))
+        #expect(numbers.contains("as PDF with properties {image quality:Best}"))
+
+        let pages = IWorkAutomation.script(for: .pages, bundleID: "com.apple.Pages")
+        #expect(pages.contains("as Microsoft Word"))
+        #expect(pages.contains(#"else if exportKind is "text" then"#))
+        #expect(pages.contains("as unformatted text"))
+        // An unknown format is an error, not a silent success.
+        #expect(pages.contains(#"error "unknown format""#))
+        #expect(IWorkAutomation.exports(for: .word).isEmpty)
+    }
+
+    @Test func closesOnlyWhatItOpenedAndNeverSaves() {
+        let script = IWorkAutomation.script(for: .pages, bundleID: "com.apple.Pages")
+        // New since the app was asked, and in the job's folder or imported under the
+        // copy's name.
+        #expect(script.contains("if knownIds does not contain docId then"))
+        #expect(script.contains(#"docPath contains jobId or (docPath is "" and (docName is importName or docName is copyName))"#))
+        #expect(script.contains("saving no"))
+        #expect(!script.contains("save theDoc"))
+        #expect(script.contains(#"if quitting is "quit" and (count of documents) is 0 then quit"#))
+        // macOS refusing to let the notch control the app is told apart.
+        #expect(script.contains("-1743"))
+        #expect(IWorkAutomation.readyScript(bundleID: "com.apple.Pages").contains(#"if errorNumber is -1743 then return "denied""#))
+        // The tidy handler takes the arguments the conversion passes after the format.
+        #expect(IWorkAutomation.tidyHandler(bundleID: "com.apple.Pages")
+            .contains("on tidy(jobId, knownIds, importName, copyName, quitting)"))
+    }
+
+    @Test func readsCSVAsNumbersWritesIt() {
+        #expect(IWorkAutomation.csvRows("a,b\r\n\"x, \"\"y\"\"\",2\r\n") == [["a", "b"], ["x, \"y\"", "2"]])
+        #expect(IWorkAutomation.csvRows("\"line\nbreak\",z\n,") == [["line\nbreak", "z"], ["", ""]])
+        #expect(IWorkAutomation.csvRows("") == [])
+    }
+
+    @Test func tidiesNumbersCSV() {
+        // Numbers pads rows to the table's width and keeps its empty rows.
+        let padded = "Item,Cost,,,\r\nCafé,12.5,,,\r\n\"北京, \"\"trip\"\"\",300,,,\r\n,,,,\r\n"
+        let tidied = IWorkAutomation.tidiedCSV(Data(padded.utf8))
+        #expect(tidied.starts(with: [0xEF, 0xBB, 0xBF]))
+        #expect(String(decoding: tidied.dropFirst(3), as: UTF8.self)
+            == "Item,Cost\r\nCafé,12.5\r\n\"北京, \"\"trip\"\"\",300\r\n")
+        // A byte-order mark already there isn't doubled.
+        let marked = IWorkAutomation.tidiedCSV(Data([0xEF, 0xBB, 0xBF]) + Data("a,b\n".utf8))
+        #expect(String(decoding: marked.dropFirst(3), as: UTF8.self) == "a,b\r\n")
+    }
+
+    @Test func textGetsLineFeeds() {
+        let data = IWorkAutomation.normalizedText(Data("Café\r北京\r\nend".utf8))
+        #expect(String(decoding: data, as: UTF8.self) == "Café\n北京\nend\n")
     }
 }

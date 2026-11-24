@@ -201,11 +201,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// opens; `--preview-swap` (below); `--preview-hud` cycles the volume, brightness, headphone and charging indicators
     /// (the charging one shows the real power state) with sample values (the real volume and brightness are never touched).
     /// `--preview-convert PATH` shows PATH as if it had been dropped on the notch (with
-    /// `--preview-open`, the panel stays open on it).
+    /// `--preview-open`, the panel stays open on it; with `--preview-convert-to FORMAT`,
+    /// it's converted).
     private func runPreviewFlags() {
         let arguments = CommandLine.arguments
         if let index = arguments.firstIndex(of: "--preview-convert"), index + 1 < arguments.count {
             convert.stage([URL(fileURLWithPath: arguments[index + 1])])
+            // `--preview-convert-to FORMAT` (a `ConvertTarget`, e.g. pdf or powerPoint)
+            // then converts it, as a click on that format would.
+            if let index = arguments.firstIndex(of: "--preview-convert-to"), index + 1 < arguments.count,
+               let target = ConvertTarget(rawValue: arguments[index + 1]) {
+                Task { [convert] in
+                    try? await Task.sleep(for: .seconds(1))
+                    convert.convert(to: target)
+                }
+            }
         }
         if arguments.contains("--preview-timer") {
             timer.start(minutes: 25)

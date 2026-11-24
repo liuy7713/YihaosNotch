@@ -87,18 +87,16 @@ struct ConvertPanel: View {
         }
     }
 
-    /// The first time an Office app converts, it asks for access to its folder, maybe
-    /// behind other windows: say so, or the notch just looks stuck.
+    /// The first time an app converts, macOS asks whether the notch may control it,
+    /// and an Office app asks for access to its folder, maybe behind other windows:
+    /// say so, or the notch just looks stuck.
     private func firstTimeHint(_ target: ConvertTarget) -> String? {
-        guard let file = convert.files.first else { return nil }
-        let app: Office.App? = switch ConvertCatalog.kind(of: file) {
-        case .presentation: .powerPoint
-        case .spreadsheet where target != .csv || !XLSX.canRead(file): .excel
-        case .document, .markdown: (target == .pdf || target == .word) && settings.convertUseWord ? .word : nil
-        default: nil
-        }
-        guard let app, Office.isInstalled(app), !app.hasWorked else { return nil }
-        return "\(app.name) may ask for access to a folder. Allow it."
+        guard let file = convert.files.first,
+              let app = ConvertCatalog.app(for: file, to: target, useWord: settings.convertUseWord),
+              !app.hasWorked
+        else { return nil }
+        return app.isOffice ? "\(app.name) may ask for access to a folder. Allow it."
+            : "macOS may ask whether the notch can control \(app.name). Allow it."
     }
 }
 
@@ -132,16 +130,23 @@ private struct FormatChoices: View {
 
     private var caption: String {
         var parts = ["Saves \(convert.destinationDescription)."]
-        let documents = convert.files.contains { [.document, .markdown].contains(ConvertCatalog.kind(of: $0)) }
-        if documents, settings.convertUseWord, WordAutomation.isInstalled,
-           convert.targets.contains(where: { $0 == .pdf || $0 == .word }) {
-            parts.append("Microsoft Word makes the PDF and Word files.")
-        }
-        let kinds = Set(convert.files.map(ConvertCatalog.kind(of:)))
-        if kinds.contains(.presentation) {
-            parts.append("Microsoft PowerPoint opens the slides to convert them.")
-        } else if kinds.contains(.spreadsheet), convert.targets.contains(where: { $0 == .pdf || $0 == .excel }) {
-            parts.append("Microsoft Excel makes the PDF and Excel files.")
+        // Which app does the work: the first file of each kind decides.
+        var said: Set<ConvertKind> = []
+        for file in convert.files {
+            guard let kind = ConvertCatalog.kind(of: file), !said.contains(kind), parts.count < 3 else { continue }
+            said.insert(kind)
+            let apps = convert.targets.map { ConvertCatalog.app(for: file, to: $0, useWord: settings.convertUseWord) }
+            guard let app = apps.compactMap({ $0 }).first else { continue }
+            // Every format needs the app, or only some (macOS makes the rest).
+            let all = !apps.contains(nil)
+            let sentence = switch kind {
+            case .presentation: "\(app.fullName) opens the slides to convert them."
+            case .spreadsheet where all: "\(app.fullName) opens the spreadsheets to convert them."
+            case .spreadsheet: "\(app.fullName) makes the PDF and Excel files."
+            case _ where all: "\(app.fullName) opens the documents to convert them."
+            default: "\(app.fullName) makes the PDF and Word files."
+            }
+            parts.append(sentence)
         }
         return parts.joined(separator: " ")
     }

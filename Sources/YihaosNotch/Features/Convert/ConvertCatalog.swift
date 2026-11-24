@@ -83,24 +83,47 @@ enum ConvertCatalog {
 
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd"]
 
-    /// Opened by PowerPoint. Slide shows (.pps, .ppsx) and files with macros are left
-    /// out: PowerPoint starts the show or asks about the macros.
+    /// Opened by PowerPoint or Keynote (Keynote can't open .odp). Slide shows (.pps,
+    /// .ppsx) and files with macros are left out: PowerPoint starts the show or asks
+    /// about the macros.
     static let presentationTypes: [UTType] = [
         "org.openxmlformats.presentationml.presentation", "com.microsoft.powerpoint.ppt",
-        "org.oasis-open.opendocument.presentation",
+        "org.oasis-open.opendocument.presentation", "com.apple.iwork.keynote.key", "com.apple.iwork.keynote.sffkey",
     ].compactMap { UTType($0) }
 
-    /// Opened by Excel (CSV only when Excel is there; otherwise it's text).
+    /// Opened by Excel or Numbers (Numbers can't open .ods; CSV only when one of them is
+    /// there, otherwise it's text).
     static let spreadsheetTypes: [UTType] = [
         "org.openxmlformats.spreadsheetml.sheet", "com.microsoft.excel.xls",
-        "org.oasis-open.opendocument.spreadsheet",
+        "org.oasis-open.opendocument.spreadsheet", "com.apple.iwork.numbers.numbers",
+        "com.apple.iwork.numbers.sffnumbers",
     ].compactMap { UTType($0) }
+
+    static let pagesTypes: [UTType] = [
+        "com.apple.iwork.pages.pages", "com.apple.iwork.pages.sffpages",
+    ].compactMap { UTType($0) }
+
+    /// Keynote, Numbers and Pages documents, by extension: the types are only known on
+    /// a Mac that has the apps.
+    static let iWorkExtensions: [String: ConvertApp] = ["key": .keynote, "numbers": .numbers, "pages": .pages]
+
+    /// Word documents Pages opens, when Word isn't there to.
+    static let pagesOpensExtensions: Set<String> = ["doc", "docx"]
 
     static func kind(of url: URL) -> ConvertKind? {
         let ext = url.pathExtension.lowercased()
         if markdownExtensions.contains(ext) { return .markdown }
         // macOS can't play MKV; MatroskaConverter copies what's inside into an MP4.
         if ext == "mkv" { return .movie }
+        if let app = iWorkExtensions[ext] {
+            // A .key file may also be a private key (text), not a presentation.
+            guard isIWorkDocument(url) else { return nil }
+            return switch app {
+            case .keynote: .presentation
+            case .numbers: .spreadsheet
+            default: .document
+            }
+        }
         guard let type = UTType(filenameExtension: ext) else { return nil }
         return kind(of: type)
     }
@@ -109,7 +132,10 @@ enum ConvertCatalog {
         if type.conforms(to: .pdf) { return .pdf }
         if presentationTypes.contains(where: type.conforms(to:)) { return .presentation }
         if spreadsheetTypes.contains(where: type.conforms(to:)) { return .spreadsheet }
-        if type.conforms(to: .commaSeparatedText), Office.isInstalled(.excel) { return .spreadsheet }
+        if type.conforms(to: .commaSeparatedText), ConvertApp.isInstalled(.excel) || ConvertApp.isInstalled(.numbers) {
+            return .spreadsheet
+        }
+        if pagesTypes.contains(where: type.conforms(to:)) { return .document }
         if let markdown = UTType("net.daringfireball.markdown"), type.conforms(to: markdown) { return .markdown }
         // Images ImageIO can read: not SVG, which is an image to UTType but not to ImageIO.
         if type.conforms(to: .image) { return imageTypes.contains(type.identifier) ? .image : nil }
@@ -121,6 +147,15 @@ enum ConvertCatalog {
         if type.conforms(to: .movie), playable { return .movie }
         if type.conforms(to: .audio), playable { return .audio }
         return nil
+    }
+
+    /// A Keynote, Numbers or Pages document is a zip or a package folder. One that
+    /// can't be read (yet) counts: it's judged by its name.
+    static func isIWorkDocument(_ url: URL) -> Bool {
+        if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { return true }
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return true }
+        defer { try? handle.close() }
+        return (try? handle.read(upToCount: 2)) == Data("PK".utf8)
     }
 
     /// Everything the files can all become, in the order of the first file's kind.
@@ -156,27 +191,55 @@ enum ConvertCatalog {
         }
     }
 
-    /// Leaves out what needs an Office app that isn't installed. An .xlsx becomes CSV
-    /// without Excel; everything else about slides and spreadsheets needs the app.
-    static func available(_ targets: [ConvertTarget], for url: URL) -> [ConvertTarget] {
+    /// The apps that can turn `url` into `target`, best first, one of which has to be
+    /// installed; empty when macOS does it alone. Office comes first: it knows its own
+    /// files best. Word documents aren't here: without Word or Pages, macOS's text
+    /// system converts them (see `app(for:to:useWord:)`).
+    static func apps(for url: URL, to target: ConvertTarget) -> [ConvertApp] {
+        let ext = url.pathExtension.lowercased()
+        if let app = iWorkExtensions[ext], kind(of: url) != nil { return [app] }
         switch kind(of: url) {
         case .presentation:
-            return Office.isInstalled(.powerPoint) ? targets : []
+            return ext == "odp" ? [.powerPoint] : [.powerPoint, .keynote]
         case .spreadsheet:
-            if Office.isInstalled(.excel) { return targets }
-            return XLSX.canRead(url) ? targets.filter { $0 == .csv } : []
+            // An .xlsx becomes CSV here; others are saved as one by the app first.
+            if target == .csv, XLSX.canRead(url) { return [] }
+            return ext == "ods" ? [.excel] : [.excel, .numbers]
         default:
-            return targets
+            return []
         }
     }
 
-    /// The Office app a file needs and doesn't have, if that's why nothing is offered.
-    static func missingApp(for url: URL) -> Office.App? {
-        switch kind(of: url) {
-        case .presentation where !Office.isInstalled(.powerPoint): .powerPoint
-        case .spreadsheet where available(targets(for: .spreadsheet, several: false), for: url).isEmpty: .excel
-        default: nil
+    /// The app that converts `url` to `target`, or nil when macOS does it. Word or
+    /// Pages makes PDFs and Word files from documents when the setting allows: Word
+    /// from anything it reads, Pages from Word files.
+    static func app(for url: URL, to target: ConvertTarget, useWord: Bool) -> ConvertApp? {
+        let needed = apps(for: url, to: target)
+        if !needed.isEmpty { return needed.first(where: ConvertApp.isInstalled) }
+        guard useWord, target == .pdf || target == .word,
+              [.document, .markdown].contains(kind(of: url))
+        else { return nil }
+        if ConvertApp.isInstalled(.word) { return .word }
+        let pages = kind(of: url) == .document && pagesOpensExtensions.contains(url.pathExtension.lowercased())
+        return pages && ConvertApp.isInstalled(.pages) ? .pages : nil
+    }
+
+    /// Leaves out what needs an app that isn't installed. An .xlsx still becomes CSV.
+    static func available(_ targets: [ConvertTarget], for url: URL) -> [ConvertTarget] {
+        targets.filter { target in
+            let needed = apps(for: url, to: target)
+            return needed.isEmpty || needed.contains(where: ConvertApp.isInstalled)
         }
+    }
+
+    /// The apps a file needs, one of them, when none is installed and that's why
+    /// nothing is offered.
+    static func missingApps(for url: URL) -> [ConvertApp]? {
+        guard let kind = kind(of: url), available(targets(for: kind, several: false), for: url).isEmpty else {
+            return nil
+        }
+        let needed = apps(for: url, to: .pdf)
+        return needed.isEmpty ? nil : needed
     }
 
     /// Whether `target` turns all of `urls` into a single file.
@@ -193,7 +256,7 @@ enum ConvertCatalog {
     }
 
     /// Why a drop can't be converted: the kind of file isn't supported (yet), some of
-    /// the files can't be converted, it needs an Office app that isn't installed, or the
+    /// the files can't be converted, it needs an app that isn't installed, or the
     /// files can't become any one format together. Nil when they can be converted.
     struct Refusal: Equatable, Sendable {
         let title: String
@@ -205,25 +268,14 @@ enum ConvertCatalog {
         let kinds = urls.map(kind(of:))
         let unknown = zip(urls, kinds).filter { $0.1 == nil }.map(\.0)
         if unknown.count == urls.count { return unsupported(urls) }
-        // Files that need PowerPoint or Excel come first: dropping them on their own
-        // wouldn't help.
-        let needing = urls.filter { missingApp(for: $0) != nil }
+        // Files that need an app that isn't installed come first: dropping them on
+        // their own wouldn't help.
+        let needing = urls.filter { missingApps(for: $0) != nil }
         if let first = needing.first {
             let title = needing.count == 1 ? "Can't convert \(first.lastPathComponent)"
                 : needing.count == urls.count ? "Can't convert these files"
                 : "Can't convert \(needing.count) of these files"
-            let apps = Set(needing.compactMap(missingApp(for:)))
-            let extensions = Set(needing.map { $0.pathExtension.uppercased() })
-            let detail: String = if apps.count > 1 {
-                "Converting them needs Microsoft PowerPoint and Excel."
-            } else if apps.first == .powerPoint {
-                "Converting slides needs Microsoft PowerPoint."
-            } else if extensions.count == 1, let ext = extensions.first {
-                "Converting \(ext) files needs Microsoft Excel."
-            } else {
-                "Converting these spreadsheets needs Microsoft Excel."
-            }
-            return Refusal(title: title, detail: detail)
+            return Refusal(title: title, detail: neededAppsDetail(needing))
         }
         if !unknown.isEmpty {
             let known = kinds.compactMap { $0 }
@@ -247,6 +299,33 @@ enum ConvertCatalog {
         }
         return Refusal(title: "Can't convert these together",
                        detail: "\(nouns[0].prefix(1).uppercased() + nouns[0].dropFirst()) and \(nouns[1]) need different formats. Drop them separately.")
+    }
+
+    /// "Converting slides needs Microsoft PowerPoint or Keynote." Files that need
+    /// different apps: "Converting them needs Microsoft PowerPoint or Keynote, and
+    /// Microsoft Excel or Numbers."
+    private static func neededAppsDetail(_ needing: [URL]) -> String {
+        var choices: [[ConvertApp]] = []
+        for url in needing {
+            if let apps = missingApps(for: url), !choices.contains(apps) { choices.append(apps) }
+        }
+        let shared = choices.dropFirst().reduce(choices.first ?? []) { result, apps in result.filter(apps.contains) }
+        func phrase(_ apps: [ConvertApp]) -> String { apps.map(\.fullName).joined(separator: " or ") }
+        guard !shared.isEmpty else {
+            return "Converting them needs \(choices.map(phrase).joined(separator: ", and "))."
+        }
+        let extensions = Set(needing.map { $0.pathExtension.lowercased() })
+        let kinds = Set(needing.map(kind(of:)))
+        let subject: String = if kinds == [.presentation], extensions.isDisjoint(with: ["key", "odp"]) {
+            "slides"
+        } else if extensions.count == 1, let ext = extensions.first {
+            "\(iWorkExtensions[ext]?.name ?? ext.uppercased()) files"
+        } else if kinds == [.spreadsheet] {
+            "these spreadsheets"
+        } else {
+            "them"
+        }
+        return "Converting \(subject) needs \(phrase(shared))."
     }
 
     /// Nothing in the drop is a kind of file the notch converts.
@@ -273,11 +352,8 @@ enum ConvertCatalog {
 
     /// What to do instead, for files people often have.
     private static let hints: [String: String] = [
-        "key": "Export it from Keynote as PowerPoint or PDF, then drop that.",
-        "numbers": "Export it from Numbers as Excel or CSV, then drop that.",
-        "pages": "Export it from Pages as Word or PDF, then drop that.",
-        "pps": "Open it in PowerPoint and save it as a presentation (.pptx) first.",
-        "ppsx": "Open it in PowerPoint and save it as a presentation (.pptx) first.",
+        "pps": "It's a slide show. Open it in PowerPoint or Keynote and save a presentation (.pptx) first.",
+        "ppsx": "It's a slide show. Open it in PowerPoint or Keynote and save a presentation (.pptx) first.",
         "pptm": "It has macros. Save a copy without them (.pptx) first.",
         "xlsm": "It has macros. Save a copy without them (.xlsx) first.",
         "zip": "Unzip it and drop the files inside.",
