@@ -48,6 +48,14 @@ final class AppSettings {
     var showLyrics: Bool {
         didSet { defaults.set(showLyrics, forKey: Key.lyrics) }
     }
+    /// A global shortcut joins the meeting that's on or about to start. Off until
+    /// turned on in Settings.
+    var joinMeetingShortcutEnabled: Bool {
+        didSet { defaults.set(joinMeetingShortcutEnabled, forKey: Key.joinMeetingShortcut) }
+    }
+    var joinMeetingShortcut: KeyCombo {
+        didSet { defaults.set(try? JSONEncoder().encode(joinMeetingShortcut), forKey: Key.joinMeetingCombo) }
+    }
     /// Calendars left out of the panel and the countdown, by identifier. Stored as the
     /// ones hidden rather than shown, so a calendar added later appears by default.
     var hiddenCalendars: Set<String> {
@@ -139,6 +147,7 @@ final class AppSettings {
             Key.welcome: 0,
             Key.centerStage: true,
             Key.lyrics: true,
+            Key.joinMeetingShortcut: false,
             Key.customTimer: TimerDurations.defaultCustom,
             Key.updates: true,
             Key.convertDrop: true,
@@ -160,6 +169,10 @@ final class AppSettings {
         cameraCenterStage = d.bool(forKey: Key.centerStage)
         showLyrics = d.bool(forKey: Key.lyrics)
         customTimerMinutes = min(max(d.integer(forKey: Key.customTimer), 1), TimerService.maxMinutes)
+        joinMeetingShortcutEnabled = d.bool(forKey: Key.joinMeetingShortcut)
+        joinMeetingShortcut = d.data(forKey: Key.joinMeetingCombo)
+            .flatMap { try? JSONDecoder().decode(KeyCombo.self, from: $0) }
+            .flatMap { KeyCombo.isAcceptable(modifiers: $0.modifiers) ? $0 : nil } ?? .joinMeetingDefault
         hiddenCalendars = Set(d.stringArray(forKey: Key.hiddenCalendars) ?? [])
         checkForUpdates = d.bool(forKey: Key.updates)
         convertDropEnabled = d.bool(forKey: Key.convertDrop)
@@ -185,6 +198,8 @@ final class AppSettings {
         static let lyrics = "showLyrics"
         static let customTimer = "customTimerMinutes"
         static let hiddenCalendars = "hiddenCalendars"
+        static let joinMeetingShortcut = "joinMeetingShortcutEnabled"
+        static let joinMeetingCombo = "joinMeetingShortcut"
         static let updates = "checkForUpdates"
         static let convertDrop = "convertDropEnabled"
         static let convertSave = "convertSaveLocation"

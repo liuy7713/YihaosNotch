@@ -79,6 +79,10 @@ struct CompactActivityView: View {
             Image(systemName: count < total ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(count == 0 ? Theme.low : count < total ? Color.yellow : Theme.charge)
+        case .joining(let provider):
+            Image(systemName: provider == nil ? "video.slash" : "video.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(provider == nil ? Theme.secondary : Theme.primary)
         }
     }
 
@@ -146,8 +150,17 @@ struct CompactActivityView: View {
                 .foregroundStyle(Theme.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+        case .joining(let provider):
+            // Quiet when there's nothing to join: grey, and gone in a moment.
+            Text(provider ?? Self.noMeeting)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(provider == nil ? Theme.secondary : Theme.primary)
+                .lineLimit(1)
+                .padding(.horizontal, 6)
         }
     }
+
+    static let noMeeting = "No meeting"
 
     /// Symbol, word and colour for the charging wings. "Charging" and "Charged" are
     /// green like the battery's fill; "Plugged In" (on power, not charging) stays grey.

@@ -24,6 +24,9 @@ enum LiveActivity: Equatable {
     /// A conversion just finished (or failed) out of sight.
     /// Converting ended: how many files were made, out of how many.
     case converted(count: Int, total: Int)
+    /// The join-meeting shortcut was pressed: the call's app ("Zoom"), or nil when
+    /// there was nothing to join.
+    case joining(provider: String?)
 
     /// Stable identity for animations, ignoring the changing payload.
     var kind: String {
@@ -39,6 +42,7 @@ enum LiveActivity: Equatable {
         case .timerDone: "timerDone"
         case .converting: "converting"
         case .converted: "converted"
+        case .joining(let provider): "joining-\(provider ?? "")"
         }
     }
 }
@@ -176,9 +180,9 @@ final class NotchViewModel {
     var wingWidth: CGFloat {
         switch activity {
         case .headphones(let name, _):
-            let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
-            let textWidth = (name as NSString).size(withAttributes: [.font: font]).width
-            return min(max(textWidth.rounded(.up) + 16, 40), 110)
+            return Self.wingWidth(fitting: name)
+        case .joining(let provider):
+            return Self.wingWidth(fitting: provider ?? CompactActivityView.noMeeting)
         case .timer, .converting, .converted:
             return 48
         case .charging:
@@ -186,6 +190,12 @@ final class NotchViewModel {
         default:
             return 40
         }
+    }
+
+    private static func wingWidth(fitting text: String) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
+        return min(max(textWidth.rounded(.up) + 16, 40), 110)
     }
 
     var closedWidth: CGFloat {
