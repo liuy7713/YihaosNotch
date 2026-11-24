@@ -137,14 +137,19 @@ private struct FormatChoices: View {
             said.insert(kind)
             let apps = convert.targets.map { ConvertCatalog.app(for: file, to: $0, useWord: settings.convertUseWord) }
             guard let app = apps.compactMap({ $0 }).first else { continue }
-            // Every format needs the app, or only some (macOS makes the rest).
-            let all = !apps.contains(nil)
-            let sentence = switch kind {
-            case .presentation: "\(app.fullName) opens the slides to convert them."
-            case .spreadsheet where all: "\(app.fullName) opens the spreadsheets to convert them."
-            case .spreadsheet: "\(app.fullName) makes the PDF and Excel files."
-            case _ where all: "\(app.fullName) opens the documents to convert them."
-            default: "\(app.fullName) makes the PDF and Word files."
+            // Every format needs the app, or only some (macOS makes the rest): "makes
+            // the PDF", "makes the PDF and Word files".
+            let made = zip(convert.targets, apps).filter { $0.1 != nil }.map { $0.0.label() }
+            let sentence = if made.count == convert.targets.count {
+                switch kind {
+                case .presentation: "\(app.fullName) opens the slides to convert them."
+                case .spreadsheet: "\(app.fullName) opens the spreadsheets to convert them."
+                default: "\(app.fullName) opens the documents to convert them."
+                }
+            } else if made.count == 1 {
+                "\(app.fullName) makes the \(made[0])."
+            } else {
+                "\(app.fullName) makes the \(made.joined(separator: " and ")) files."
             }
             parts.append(sentence)
         }
