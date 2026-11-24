@@ -100,7 +100,7 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--preview-convert-to FORMAT` | With `--preview-convert`, converts the file a second later as if FORMAT's button were clicked. FORMAT is a `ConvertTarget` case: `pdf`, `png`, `jpeg`, `word`, `text`, `powerPoint`, `excel`, `csv`… The result is saved where Settings says (Downloads by default). |
 | `--without-office` | Converts as if Microsoft Office weren't installed, so slides, spreadsheets and Word files go to Keynote, Numbers and Pages. |
 | `--demo` | Shows made-up content for screenshots: a track with lyrics and artwork drawn in code, and a week of invented events with a meeting on the next quarter hour. Music, Calendar, headphones, the media keys and update checks aren't started, so nothing real appears. Add `--preview-open`, `--preview-timer` or `--preview-convert PATH` for the other scenes. |
-| `--demo-meeting` | As `--demo`, with the track paused, so the closed notch counts down to the meeting (add `-eventReminderMinutes 15` if the reminder is set shorter). With the join shortcut on, pressing it within 10 minutes of the meeting shows Zoom in the notch but opens nothing (the demo's links are made up). |
+| `--demo-meeting` | As `--demo`, with the track paused, so the closed notch counts down to the meeting (add `-eventReminderMinutes 15` if the reminder is set shorter). |
 | `--clean-seconds N` | Clean Keyboard runs for N seconds (5 to 60) instead of the Settings length, for quick tests. |
 | `--update-feed URL` | Reads the release description from URL (a copy of GitHub's `releases/latest` JSON) instead of GitHub, checks two seconds after launch, and accepts the image from any address; the signature check still applies, so only a build signed with your identity installs. Logs the permission state at launch (category Updater), for checking an update keeps it. |
 
@@ -154,10 +154,10 @@ when updating one, pin the new release's commit and keep the version in the comm
 | `Core/` | Settings, theme and transitions, notch shape, view model (state and live-activity priority) |
 | `Views/` | The morphing shape, open panel, compact live activities |
 | `Features/NowPlaying` | Music and Spotify via distributed notifications and AppleScript; LRCLIB lyrics |
-| `Features/Calendar` | EventKit events, meeting-link detection (Zoom/Teams/Meet/Webex), which meeting the join shortcut picks |
+| `Features/Calendar` | EventKit events, meeting-link detection (Zoom/Teams/Meet/Webex) |
 | `Features/Battery` | IOKit power-source notifications |
 | `Features/Camera` | Mirror; the camera runs only while it's visible |
-| `Features/System` | Volume/brightness keys (event tap, opt-in), headphone connection, global shortcuts (Carbon hot keys, no permission) |
+| `Features/System` | Volume/brightness keys (event tap, opt-in), headphone connection |
 | `Features/Timer` | Countdown timer, opened from the header clock |
 | `Features/Convert` | Files dropped on the notch: which formats each kind can become (`ConvertCatalog`), the conversions (ImageIO, PDFKit, AVFoundation, the text system, and over AppleScript Microsoft Office or, without it, Keynote, Numbers and Pages: `ConvertApp` picks and prepares them, `Office` and `IWork` drive them), Markdown to HTML with Foundation's parser, and saving without replacing anything |
 | `Features/CleanKeyboard` | Turning input off for wiping: one HID event tap on its own thread, its rules and watchdog, the session's steps, the overlay, and putting Caps Lock back |
