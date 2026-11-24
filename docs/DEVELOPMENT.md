@@ -125,6 +125,13 @@ session is checked by hand, with `--clean-seconds 5`. They never touch Calendar,
 Apple events or event taps: those would ask for permissions on Terminal's behalf, or
 control the real Music app. Window behaviour is checked by eye with the flags above.
 
+GitHub Actions runs the same script on every push to master and every pull request
+(`.github/workflows/check.yml`, on a `macos-26` runner with Xcode 26.6 selected through
+`DEVELOPER_DIR`). It reads the repository and nothing else: no secrets and no signing,
+which stays on the Mac that releases. On CI a failure also prints the full build or test
+output, folded under "Full output". Third-party actions are pinned to a commit SHA;
+when updating one, pin the new release's commit and keep the version in the comment.
+
 ## Layout
 
 | Path | What |

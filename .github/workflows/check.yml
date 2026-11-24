@@ -1,0 +1,43 @@
+# Runs scripts/check.sh (debug build, tests, plist and script syntax) on every push to
+# master and every pull request. No signing and no secrets: the signing identity
+# never leaves the Mac that releases.
+name: Check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      # Package.swift needs Swift 6.2, which comes with Xcode 26.
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # check.sh builds into ~/Library/Caches/YihaosNotch/.build-check.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/YihaosNotch/.build-check
+          key: spm-${{ runner.os }}-${{ runner.arch }}-xcode26.6-${{ hashFiles('Package.swift', 'Sources/**', 'Tests/**') }}
+          restore-keys: spm-${{ runner.os }}-${{ runner.arch }}-xcode26.6-
+
+      - name: Check
+        run: ./scripts/check.sh

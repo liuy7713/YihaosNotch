@@ -206,10 +206,12 @@ running copy restarts it on the new version.
 
 ## Building from source
 
+[![Check](https://github.com/liuy7713/YihaosNotch/actions/workflows/check.yml/badge.svg?branch=master)](https://github.com/liuy7713/YihaosNotch/actions/workflows/check.yml)
+
 Needs Xcode 26 (Swift 6.2). `./scripts/build.sh --install` builds and installs it;
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) covers signing, releases, development flags,
 tests and the code layout. It's a hobby project: issues and small pull requests are
-welcome (run `./scripts/check.sh` first), and replies may take a while.
+welcome (run `./scripts/check.sh` first; GitHub runs it on each one too), and replies may take a while.
 
 ## Licence
 
