@@ -42,6 +42,13 @@ struct ScrollStepper {
     private(set) var accumulated: Double = 0
     private var lastStep: TimeInterval = -.infinity
 
+    // Written out: before Swift 6.4 the private property above makes the memberwise
+    // initializer private, so Xcode 26 wouldn't see one taking these.
+    init(pointsPerStep: Double = 24, minimumInterval: TimeInterval = 0.04) {
+        self.pointsPerStep = pointsPerStep
+        self.minimumInterval = minimumInterval
+    }
+
     /// `up` is travel with natural scrolling already undone: positive for fingers up or
     /// the wheel rolled away. `time` is the event's timestamp. Returns 1, -1 or 0.
     mutating func steps(up: Double, precise: Bool, phase: Phase, time: TimeInterval) -> Int {
