@@ -279,36 +279,87 @@ enum WordAutomation {
         return true
     }
 
-    private static func run(_ source: URL, id: String, to target: ConvertTarget, out: URL) async -> Bool {
-        let result = folder.appendingPathComponent("\(id)-out.\(target.fileExtension)")
-        defer { try? FileManager.default.removeItem(at: result) }
-        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
-        let firstTime = !UserDefaults.standard.bool(forKey: workedKey)
-        let script = """
-            on run argv
-                set inFile to POSIX file (item 1 of argv)
-                set outPath to item 2 of argv
-                tell application id "\(bundleID)"
-                    with timeout of 150 seconds
+    /// Closes every document with the id in its name, then quits if asked and nothing
+    /// else is open.
+    private static let tidyHandler = """
+        on tidy(theId, quitting)
+            tell application id "\(bundleID)"
+                with timeout of 120 seconds
+                    try
+                        set docNames to name of every document
+                        repeat with i from (count of docNames) to 1 by -1
+                            if (item i of docNames as text) contains theId then close document i saving no
+                        end repeat
+                    end try
+                    try
+                        if quitting is "quit" and (count of documents) is 0 then quit saving no
+                    end try
+                end timeout
+            end tell
+        end tidy
+        """
+
+    // Word's `open` returns nothing (setting a variable to it leaves it undefined),
+    // so the copy is found by the id in its name, as PowerPoint's is. Variable names
+    // must not be Word terms ("saved", "path", "name" are). Whatever happens, `tidy`
+    // closes the copy afterwards.
+    static let script = tidyHandler + """
+
+        on run argv
+            set inFile to POSIX file (item 1 of argv)
+            set outPath to item 2 of argv
+            set theId to item 6 of argv
+            set didSave to false
+            set failure to "not open"
+            tell application id "\(bundleID)"
+                with timeout of 150 seconds
+                    try
+                        -- The first time, Word asks for access to the folder.
                         if item 4 of argv is "front" then activate
-                        set theDoc to open inFile read only true add to recent files false confirm conversions false
+                        open inFile read only true add to recent files false confirm conversions false
+                        set theDoc to missing value
+                        repeat 30 times
+                            set docNames to name of every document
+                            repeat with i from 1 to count of docNames
+                                if (item i of docNames as text) contains theId then
+                                    set theDoc to document i
+                                    exit repeat
+                                end if
+                            end repeat
+                            if theDoc is not missing value then exit repeat
+                            delay 1
+                        end repeat
+                        if theDoc is missing value then error "not open"
                         if item 3 of argv is "pdf" then
                             save as theDoc file name outPath file format format PDF add to recent files false
                         else
                             save as theDoc file name outPath file format format document default add to recent files false
                         end if
-                        close theDoc saving no
-                        if item 5 of argv is "quit" and (count of documents) is 0 then quit saving no
-                    end timeout
-                end tell
-                return "ok"
-            end run
-            """
+                        set didSave to true
+                    on error errorText
+                        set failure to errorText
+                    end try
+                end timeout
+            end tell
+            my tidy(theId, item 5 of argv)
+            if didSave then return "ok"
+            error failure
+        end run
+        """
+
+    private static func run(_ source: URL, id: String, to target: ConvertTarget, out: URL) async -> Bool {
+        let result = folder.appendingPathComponent("\(id)-out.\(target.fileExtension)")
+        defer { try? FileManager.default.removeItem(at: result) }
+        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        let firstTime = !UserDefaults.standard.bool(forKey: workedKey)
         let output = await Osascript.run(script, arguments: [
             source.path, result.path, target == .pdf ? "pdf" : "docx",
-            firstTime ? "front" : "back", wasRunning ? "stay" : "quit",
+            firstTime ? "front" : "back", wasRunning ? "stay" : "quit", id,
         ], deadline: 160)
         guard output == "ok", FileManager.default.fileExists(atPath: result.path) else {
+            // Stopped or timed out part-way (Word may be waiting on its access
+            // dialog): the copy may still be open.
+            ConvertApp.tidy(handler: tidyHandler, arguments: [id, wasRunning ? "stay" : "quit"], removing: [])
             log.error("Word conversion failed")
             return false
         }

@@ -760,3 +760,35 @@ struct IWorkScriptTests {
         #expect(String(decoding: data, as: UTF8.self) == "Café\n北京\nend\n")
     }
 }
+
+/// The AppleScript sent to Microsoft Word, as text: nothing is run.
+struct WordScriptTests {
+    @Test func findsTheCopyByNameAndAlwaysClosesIt() {
+        let script = WordAutomation.script
+        // Word's `open` returns nothing: a variable set to it is undefined.
+        #expect(!script.contains("to open inFile"))
+        #expect(script.contains("open inFile read only true"))
+        #expect(script.contains("if (item i of docNames as text) contains theId then"))
+        // Closed whether or not the save worked, then the error is passed on.
+        #expect(script.contains("my tidy(theId, item 5 of argv)"))
+        #expect(script.contains("close document i saving no"))
+        #expect(script.contains("error failure"))
+    }
+
+    @Test func variablesAreNotWordTerms() {
+        // Terms of Word's dictionary (from `sdef`) that read like variable names.
+        let terms: Set<String> = ["saved", "path", "name", "document", "text", "id", "file", "content", "range",
+                                  "result", "selection", "paragraph", "page", "section", "window", "format"]
+        let pattern = try! NSRegularExpression(pattern: #"\bset (\w+) to\b|\bon \w+\(([^)]*)\)"#)
+        let script = WordAutomation.script
+        var names: Set<String> = []
+        for match in pattern.matches(in: script, range: NSRange(script.startIndex..., in: script)) {
+            for group in 1...2 {
+                guard let range = Range(match.range(at: group), in: script) else { continue }
+                script[range].split(separator: ",").forEach { names.insert($0.trimmingCharacters(in: .whitespaces)) }
+            }
+        }
+        #expect(names.contains("theDoc"))
+        #expect(names.isDisjoint(with: terms), "\(names.intersection(terms))")
+    }
+}
