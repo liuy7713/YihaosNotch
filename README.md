@@ -5,6 +5,11 @@ A quiet companion for the MacBook Pro's notch, inspired by
 black notch until it has something to say, and opens into a small panel when you
 want it.
 
+<p align="center">
+  <img src="docs/images/open-panel.png" width="788"
+       alt="The open panel: the song playing with its artwork, a synced lyric line and controls, beside a five-day calendar strip and today's agenda with a Join button">
+</p>
+
 ## Download and install
 
 **[Download the latest version](https://github.com/liuy7713/YihaosNotch/releases/latest/download/YihaosNotch.dmg)**
@@ -42,6 +47,16 @@ takes over from music or a timer for the minute before it starts and two after),
 running timer, the charger connecting (charging or just plugged in, and the charger's
 wattage), or your AirPods switching on.
 
+<p align="center">
+  <img src="docs/images/closed-notch.png" width="475"
+       alt="The closed notch with wings: album art and bars for music, a dot and 7m before a meeting, and a running timer">
+</p>
+
+<p align="center">
+  <img src="docs/images/hover-open.gif" width="788"
+       alt="The notch opening from its music wings into the full panel, then closing again">
+</p>
+
 **Open** (rest the pointer on the notch, click it, or swipe down on it with two
 fingers), it shows:
 
@@ -61,11 +76,21 @@ fingers), it shows:
   you move) on cameras that have it, such as recent MacBooks' 12 MP camera, toggled from a
   button in the mirror.
 
+<p align="center">
+  <img src="docs/images/timer.png" width="788"
+       alt="The open panel with a 25-minute timer running: the time left, when it ends, and Pause and plus one minute buttons">
+</p>
+
 **Converting files**: drag a file onto the notch and it opens with the formats that
 file can become; one click converts. The result goes to Downloads (or next to the
 original, or a folder of your choice, in Settings), never replacing anything, with
 Show in Finder and Undo, and you can drag it straight out of the notch into an email
 or upload. It all happens on your Mac; nothing is uploaded.
+
+<p align="center">
+  <img src="docs/images/convert.png" width="788"
+       alt="A photo dropped on the notch, with buttons to convert it to JPEG, PNG or PDF">
+</p>
 
 | Drop | Get |
 |---|---|

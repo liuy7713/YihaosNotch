@@ -243,6 +243,22 @@ final class NowPlayingService {
         Task { await syncRunningPlayers() }
     }
 
+    /// Development aid for `--demo`: shows a made-up track with no player behind it, so
+    /// screenshots never show what's really playing. Nothing is looked up or sent, and
+    /// `start` is never called alongside it.
+    func showDemo(_ track: Track, artwork: NSImage, lyrics: Lyrics?, position: Double, playing: Bool) {
+        self.track = track
+        self.artwork = artwork
+        if let image = artwork.cgImage(forProposedRect: nil, context: nil, hints: nil),
+           let accent = ArtworkColor.accent(from: image) {
+            self.accent = accent
+        }
+        self.lyrics = lyrics
+        anchor(at: position)
+        isPlaying = playing
+        isRecentlyActive = true
+    }
+
     /// Elapsed playback time, extrapolated from the last known position.
     func position(at date: Date) -> Double {
         guard let track else { return 0 }

@@ -100,17 +100,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Someone who finished an earlier welcome has already been asked; they only see
         // the tour again.
         let welcoming = settings.isFirstRun
-        if !welcoming {
-            nowPlaying.start()
-            followUpdateSetting()
-        }
         battery.start()
-        // Never asks at launch (which is often login): the welcome, the notch's Connect
-        // Calendar button and Settings ask, when the user is looking.
-        if settings.calendarEnabled { calendar.start(requestingAccess: false) }
-        headphones.start()
-        // Silent at launch: the permission prompt only ever comes from a toggle.
-        if settings.replaceSystemHUD { mediaKeys.enable(prompt: false) }
+        if DemoContent.isOn {
+            // Made-up content only: nothing real is read, so nothing personal shows.
+            DemoContent.fill(nowPlaying: nowPlaying, calendar: calendar)
+        } else {
+            if !welcoming {
+                nowPlaying.start()
+                followUpdateSetting()
+            }
+            // Never asks at launch (which is often login): the welcome, the notch's Connect
+            // Calendar button and Settings ask, when the user is looking.
+            if settings.calendarEnabled { calendar.start(requestingAccess: false) }
+            headphones.start()
+            // Silent at launch: the permission prompt only ever comes from a toggle.
+            if settings.replaceSystemHUD { mediaKeys.enable(prompt: false) }
+        }
         if CommandLine.arguments.contains("--preview-welcome") {
             WelcomeWindowController.shared.show()
         } else if settings.needsWelcome {
@@ -154,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard settings.needsWelcome else { return }
         let firstRun = settings.isFirstRun
         settings.completeWelcome()
-        if firstRun {
+        if firstRun, !DemoContent.isOn {
             nowPlaying.start()
             followUpdateSetting()
         }

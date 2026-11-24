@@ -132,6 +132,22 @@ final class CalendarService {
         meetingCache = [:]
     }
 
+    /// Development aid for `--demo`: shows made-up events instead of the user's, without
+    /// touching EventKit. `start` is never called alongside it, so nothing replaces them.
+    func showDemo(_ items: [CalendarItem]) {
+        access = .granted
+        now = .now
+        let calendar = Calendar.current
+        let today = self.today
+        days = (-Self.daysBefore...Self.daysAfter).compactMap {
+            calendar.date(byAdding: .day, value: $0, to: today).map(calendar.startOfDay(for:))
+        }
+        eventsByDay = Dictionary(grouping: items) { calendar.startOfDay(for: $0.start) }
+            .mapValues { items in
+                items.sorted { a, b in a.isAllDay != b.isAllDay ? a.isAllDay : a.start < b.start }
+            }
+    }
+
     func requestAccess() {
         store.requestFullAccessToEvents { _, _ in
             Task { @MainActor in self.refresh() }

@@ -97,8 +97,20 @@ Pass these to the built app, e.g. `open ~/Library/Caches/YihaosNotch/Yihao\'s\ N
 | `--preview-welcome N` | Shows the welcome screen at page N (0–2), even if it has been finished. |
 | `--preview-hud` | Cycles the volume, brightness, headphone and charging indicators (charging shows the real power state). The real volume and brightness are untouched. |
 | `--preview-convert PATH` | Shows PATH as if dropped on the notch (add `--preview-open` to keep the panel open on it). |
+| `--demo` | Shows made-up content for screenshots: a track with lyrics and artwork drawn in code, and a week of invented events with a meeting on the next quarter hour. Music, Calendar, headphones, the media keys and update checks aren't started, so nothing real appears. Add `--preview-open`, `--preview-timer` or `--preview-convert PATH` for the other scenes. |
+| `--demo-meeting` | As `--demo`, with the track paused, so the closed notch counts down to the meeting (add `-eventReminderMinutes 15` if the reminder is set shorter). |
 | `--clean-seconds N` | Clean Keyboard runs for N seconds (5 to 60) instead of the Settings length, for quick tests. |
 | `--update-feed URL` | Reads the release description from URL (a copy of GitHub's `releases/latest` JSON) instead of GitHub, checks two seconds after launch, and accepts the image from any address; the signature check still applies, so only a build signed with your identity installs. Logs the permission state at launch (category Updater), for checking an update keeps it. |
+
+The README's screenshots are taken with `--demo` (plus `-welcomeCompleted N`, N being
+`AppSettings.welcomeVersion`, and `-calendarEnabled 1`), capturing only the app's
+window (`screencapture -o -l WINDOWID`, the window ID from
+`CGWindowListCopyWindowInfo` for the test copy's PID) so the menu bar and desktop stay
+out, then placed on a plain background. The opening animation is the same window
+recorded with ScreenCaptureKit under `--demo --preview-cycle`, one open-and-close
+cycle on a flat background (a gradient bands in a GIF's 256 colours). The dropped photo is a made-up picture too:
+screenshots in this public repository must never show real events, tracks, file names
+or device names.
 
 The media-key handling and Clean Keyboard (category CleanKeyboard; at debug level
 it logs each system key's subtype, which is how the Touch ID button's was found) log
